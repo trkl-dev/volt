@@ -5,12 +5,20 @@ import signal
 import sys
 from typing import TYPE_CHECKING, Any
 
+class ZHeader(ctypes.Structure):
+    _fields_ = [
+        ("name", ctypes.c_char_p),
+        ("value", ctypes.c_char_p),
+    ]
+
 class ZHttpRequest(ctypes.Structure):
     _fields_ = [
         ("method", ctypes.c_char_p),
         ("path", ctypes.c_char_p),
         ("body", ctypes.POINTER(ctypes.c_ubyte)),
         ("body_len", ctypes.c_size_t),
+        ("headers", ctypes.POINTER(ZHeader)),
+        ("num_headers", ctypes.c_size_t),
     ]
 
 class ZHttpResponse(ctypes.Structure):
@@ -25,12 +33,14 @@ class HttpRequest:
     path: str
     body: str
     body_len: int
+    headers: list[dict[str, str]]
 
-    def __init__(self, method: str, path: str, body: str, body_len: int) -> None:
+    def __init__(self, method: str, path: str, body: str, body_len: int, headers: list[dict[str, str]]) -> None:
         self.method = method
         self.path = path
         self.body = body
         self.body_len = body_len
+        self.headers = headers
 
 class HttpResponse:
     body: str
@@ -67,14 +77,21 @@ else:
 def route(path: str):
     def decorator(fn: Callable[[HttpRequest], HttpResponse]) -> Any:
         def RequestHandler(request_ptr: ZHttpRequestPtr, response_ptr: ZHttpResponsePtr):
-
             req = request_ptr.contents
+
+            request_headers = []
+            for i in range(req.num_headers):
+                request_headers.append({
+                    "name": req.headers[i].name.decode('utf-8'),
+                    "value": req.headers[i].value.decode('utf-8'),
+                })
 
             request_object = HttpRequest(
                 method=ctypes.string_at(req.method).decode('utf-8'),
                 path=ctypes.string_at(req.path).decode('utf-8'),
                 body=ctypes.string_at(req.body, req.body_len).decode('utf-8'),
                 body_len=req.body_len,
+                headers=request_headers,
             )
 
             response_object = fn(request_object)

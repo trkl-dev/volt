@@ -14,7 +14,6 @@ var route_count: usize = 0;
 
 /// Register a route
 /// ctypes.c_char_p from python are ALLEGEDLY null terminated, so we can [*:0].
-/// TODO: Check this
 export fn register_route(path: [*:0]const u8, handler: HandlerFn) void {
     if (route_count >= 10) return;
 
@@ -94,7 +93,6 @@ fn _run_server(server: *std.net.Server) void {
         if (should_exit) {
             break;
         }
-        // var connection = maybe_connection.?;
         defer connection.stream.close();
 
         var read_buffer: [1024]u8 = undefined;
@@ -113,6 +111,11 @@ fn _run_server(server: *std.net.Server) void {
 
     std.debug.print("Shutting down...\n", .{});
 }
+
+pub const Header = extern struct {
+    key: [*:0]const u8,
+    value: [*:0]const u8,
+};
 
 fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Request) !void {
     std.debug.print("Handling request for {s}\n", .{request.head.target});
@@ -134,12 +137,33 @@ fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Reques
             const content_length = request.head.content_length orelse 0;
             const body = try request_reader.readAllAlloc(allocator, content_length);
 
+            // Get the number of headers
+            var header_iterator_counter = request.iterateHeaders();
+            var num_headers: usize = 0;
+            while (header_iterator_counter.next()) |_| {
+                std.debug.print("num_headers: {d}\n", .{num_headers});
+                num_headers += 1;
+            }
+
+            const headers = try allocator.alloc(Header, num_headers);
+
+            var header_iterator = request.iterateHeaders();
+            var index: usize = 0;
+            while (header_iterator.next()) |header| {
+                std.debug.print("header - name: {s} value {s}\n", .{ header.name, header.value });
+                headers[index] = Header{ .key = try allocator.dupeZ(u8, header.name), .value = try allocator.dupeZ(u8, header.value) };
+                index += 1;
+            }
+
             const req = HttpRequest{
                 .path = null_terminated_path,
                 .method = @tagName(request.head.method),
                 .body = body.ptr,
                 .body_len = content_length,
+                .headers = headers.ptr,
+                .num_headers = num_headers,
             };
+            std.debug.print("len {any}\n", .{req.num_headers});
             const handler = routes[i].handler;
             handler(&req, &res);
         }
@@ -157,6 +181,8 @@ pub const HttpRequest = extern struct {
     path: [*:0]const u8,
     body: [*]const u8,
     body_len: usize,
+    headers: [*]Header,
+    num_headers: usize,
 };
 
 pub const HttpResponse = extern struct {

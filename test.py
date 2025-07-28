@@ -3,15 +3,12 @@ from router import HttpRequest, HttpResponse, route, run_server
 
 @route("/home")
 def home(request: HttpRequest) -> HttpResponse:
-    print("python request method: ", request.method)
-    print("python request body: ", request.body)
     return HttpResponse("this is the homepage")
 
 
 @route("/blog")
 def blog(request: HttpRequest) -> HttpResponse:
     return HttpResponse("this is the blog page")
-
 
 
 if __name__ == "__main__":
