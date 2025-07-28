@@ -32,7 +32,7 @@ class HttpResponse(ctypes.Structure):
 CALLBACK = ctypes.CFUNCTYPE(None, ctypes.POINTER(HttpRequest), ctypes.POINTER(HttpResponse))
 
 
-lib = ctypes.CDLL('./librouter.so')
+lib = ctypes.CDLL('zig-out/lib/libvolt.so')
 lib.register_route.argtypes = [ctypes.c_char_p, CALLBACK]
 lib.register_route.restype = None
 

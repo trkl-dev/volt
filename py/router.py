@@ -1,11 +1,12 @@
-from collections.abc import Callable
 import ctypes
 import threading
 import signal
 import sys
+
+from collections.abc import Callable
 from typing import Any
 
-import zig_types as zt
+from . import zig_types as zt
 
 
 class HttpRequest:

@@ -120,18 +120,15 @@ pub const Header = extern struct {
 fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Request) !void {
     std.debug.print("Handling request for {s}\n", .{request.head.target});
 
-    const path = request.head.target;
-    const null_terminated_path = try allocator.dupeZ(u8, path);
-    // const path_slice = std.mem.span(path);
-    var i: usize = 0;
-
     var res = HttpResponse{
         .body = null,
         .content_type = null,
         .status = 0,
     };
+
+    var i: usize = 0;
     while (i < route_count) : (i += 1) {
-        if (std.mem.eql(u8, routes[i].path, path)) {
+        if (std.mem.eql(u8, routes[i].path, request.head.target)) {
             const request_reader = try request.reader();
 
             const content_length = request.head.content_length orelse 0;
@@ -153,6 +150,7 @@ fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Reques
                 index += 1;
             }
 
+            const null_terminated_path = try allocator.dupeZ(u8, request.head.target);
             const req = HttpRequest{
                 .path = null_terminated_path,
                 .method = @tagName(request.head.method),

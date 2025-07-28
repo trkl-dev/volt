@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
         // only contains e.g. external object files, you can make this `null`.
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
-        .root_source_file = b.path("src/root.zig"),
+        .root_source_file = b.path("src/router.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -47,16 +47,23 @@ pub fn build(b: *std.Build) void {
     // Now, we will create a static library based on the module we created above.
     // This creates a `std.Build.Step.Compile`, which is the build step responsible
     // for actually invoking the compiler.
-    const lib = b.addLibrary(.{
-        .linkage = .static,
+    // _ = b.addLibrary(.{
+    //     .linkage = .static,
+    //     .name = "volt",
+    //     .root_module = lib_mod,
+    // });
+
+    const dylib = b.addSharedLibrary(.{
         .name = "volt",
         .root_module = lib_mod,
+        // .target = target,
+        .optimize = optimize,
     });
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
     // running `zig build`).
-    b.installArtifact(lib);
+    b.installArtifact(dylib);
 
     // This creates another `std.Build.Step.Compile`, but this one builds an executable
     // rather than a static library.
