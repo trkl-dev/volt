@@ -141,7 +141,6 @@ fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Reques
             var header_iterator_counter = request.iterateHeaders();
             var num_headers: usize = 0;
             while (header_iterator_counter.next()) |_| {
-                std.debug.print("num_headers: {d}\n", .{num_headers});
                 num_headers += 1;
             }
 
@@ -150,7 +149,6 @@ fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Reques
             var header_iterator = request.iterateHeaders();
             var index: usize = 0;
             while (header_iterator.next()) |header| {
-                std.debug.print("header - name: {s} value {s}\n", .{ header.name, header.value });
                 headers[index] = Header{ .key = try allocator.dupeZ(u8, header.name), .value = try allocator.dupeZ(u8, header.value) };
                 index += 1;
             }
@@ -163,7 +161,6 @@ fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Reques
                 .headers = headers.ptr,
                 .num_headers = num_headers,
             };
-            std.debug.print("len {any}\n", .{req.num_headers});
             const handler = routes[i].handler;
             handler(&req, &res);
         }
