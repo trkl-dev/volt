@@ -1,9 +1,6 @@
 const std = @import("std");
+
 const http = @import("http.zig");
-
-var should_exit = false;
-
-// pub const HandlerFn = *const fn () callconv(.C) [*:0]const u8;
 
 const Route = struct {
     path: []const u8,
@@ -50,8 +47,15 @@ fn match_route(path: []const u8) i32 {
     return -1;
 }
 
+var should_exit = false;
 export fn shutdown_server() void {
     should_exit = true;
+}
+
+test shutdown_server {
+    try std.testing.expect(!should_exit);
+    shutdown_server();
+    try std.testing.expect(should_exit);
 }
 
 pub export fn run_server(server_addr: [*:0]const u8, server_port: u16) void {
