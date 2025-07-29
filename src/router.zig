@@ -119,11 +119,7 @@ fn _run_server(server: *std.net.Server) !void {
 fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Request) !void {
     std.debug.print("Handling request for {s}\n", .{request.head.target});
 
-    var res = http.Response{
-        .body = null,
-        .content_type = null,
-        .status = 0,
-    };
+    var res = http.Response{ .body = null, .content_type = null, .status = 0, .headers = &.{}, .num_headers = 0 };
 
     var i: usize = 0;
     while (i < route_count) : (i += 1) {
@@ -145,7 +141,7 @@ fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Reques
             var header_iterator = request.iterateHeaders();
             var index: usize = 0;
             while (header_iterator.next()) |header| {
-                headers[index] = http.Header{ .key = try allocator.dupeZ(u8, header.name), .value = try allocator.dupeZ(u8, header.value) };
+                headers[index] = http.Header{ .name = try allocator.dupeZ(u8, header.name), .value = try allocator.dupeZ(u8, header.value) };
                 index += 1;
             }
 
@@ -160,7 +156,6 @@ fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Reques
             };
             const handler = routes[i].handler;
             handler(&req, &res);
-            std.debug.print("Response: {}", .{res.status});
         }
     }
 
@@ -174,5 +169,17 @@ fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Reques
         body = std.mem.span(res.body.?);
     }
 
-    try request.respond(body, std.http.Server.Request.RespondOptions{ .status = status });
+    const header_list = try allocator.alloc(std.http.Header, res.num_headers);
+    defer allocator.free(header_list);
+
+    for (header_list, 0..) |*header, ii| {
+        const c_header = res.headers[ii];
+        header.name = std.mem.span(c_header.name);
+        header.value = std.mem.span(c_header.value);
+    }
+
+    try request.respond(body, std.http.Server.Request.RespondOptions{
+        .status = status,
+        .extra_headers = header_list,
+    });
 }

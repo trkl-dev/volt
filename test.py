@@ -30,7 +30,11 @@ def auth(request: HttpRequest, handler: Handler) -> HttpResponse:
 
 @route("/home")
 def home(request: HttpRequest) -> HttpResponse:
-    return HttpResponse("this is the homepage")
+    return HttpResponse("this is the homepage", headers=[{
+        "name": "Something",
+        "value": "Else",
+    }]
+)
 
 
 @route("/blog")

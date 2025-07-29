@@ -26,6 +26,8 @@ class HttpResponse(ctypes.Structure):
         ("body", ctypes.c_char_p),
         ("content_type", ctypes.c_char_p),
         ("status", ctypes.c_int),
+        ("headers", ctypes.POINTER(Header)),
+        ("num_headers", ctypes.c_size_t),
     ]
 
 

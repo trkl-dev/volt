@@ -4,7 +4,7 @@ import signal
 import sys
 
 from collections.abc import Callable
-from typing import Any, TypedDict, List
+from typing import Any, Optional, TypedDict, List
 
 from . import zig_types as zt
 
@@ -29,11 +29,16 @@ class HttpResponse:
     body: str
     content_type: str
     status: int
+    headers: list[Header]
 
-    def __init__(self, body: str ="", content_type: str="text/plain", status: int=200) -> None:
+    def __init__(self, body: str = "", content_type: str = "text/plain", status: int = 200, headers: Optional[List[Header]] = None) -> None:
         self.body = body
         self.content_type = content_type
         self.status = status
+
+        self.headers = []
+        if headers is not None:
+            self.headers = headers
 
 type Middleware = Callable[[HttpRequest, Handler], HttpResponse]
 type Handler = Callable[[HttpRequest], HttpResponse]
@@ -83,6 +88,15 @@ def route(path: str):
             res.content_type = response_object.content_type.encode('utf-8')
             res.status = response_object.status
             
+            header_array_type = zt.Header * len(response_object.headers)
+            header_array = header_array_type()
+
+            res.num_headers = len(response_object.headers)
+            for i, h in enumerate(response_object.headers):
+                header_array[i].name = h["name"].encode('utf-8')
+                header_array[i].value = h["value"].encode('utf-8')
+
+            res.headers = header_array
 
         cb = zt.CALLBACK(RequestHandler)
         # _registered_callbacks.append(cb) # Prevent GC

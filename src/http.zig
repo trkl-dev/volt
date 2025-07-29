@@ -11,10 +11,12 @@ pub const Response = extern struct {
     body: ?[*:0]const u8,
     content_type: ?[*:0]const u8,
     status: c_int,
+    headers: [*]Header,
+    num_headers: usize,
 };
 
 pub const Header = extern struct {
-    key: [*:0]const u8,
+    name: [*:0]const u8,
     value: [*:0]const u8,
 };
 
