@@ -4,19 +4,20 @@ import signal
 import sys
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypedDict, List
 
 from . import zig_types as zt
 
+Header = TypedDict('Header', {'name': str, 'value': str})
 
 class HttpRequest:
     method: str
     path: str
     body: str
     body_len: int
-    headers: list[dict[str, str]]
+    headers: list[Header]
 
-    def __init__(self, method: str, path: str, body: str, body_len: int, headers: list[dict[str, str]]) -> None:
+    def __init__(self, method: str, path: str, body: str, body_len: int, headers: list[Header]) -> None:
         self.method = method
         self.path = path
         self.body = body
@@ -29,13 +30,32 @@ class HttpResponse:
     content_type: str
     status: int
 
-    def __init__(self, body: str, content_type: str="text/plain", status: int=200) -> None:
+    def __init__(self, body: str ="", content_type: str="text/plain", status: int=200) -> None:
         self.body = body
         self.content_type = content_type
         self.status = status
 
+type Middleware = Callable[[HttpRequest, Handler], HttpResponse]
+type Handler = Callable[[HttpRequest], HttpResponse]
+
+def wrap_middleware(middleware: Middleware, handler: Handler) -> Handler:
+    def wrapped(request: HttpRequest):
+        return middleware(request, handler)
+    return wrapped
+
+def create_middleware_stack(handler: Handler, *middlewares: Middleware) -> Handler:
+    for middleware in reversed(middlewares):
+        handler = wrap_middleware(middleware, handler)
+    return handler
+
+middleware_list: List[Middleware]= []
+
+def middleware(fn: Callable[[HttpRequest, Handler], HttpResponse]):
+    middleware_list.append(fn)
+    return None
 
 def route(path: str):
+    """Register a route handler on 'path'"""
     def decorator(fn: Callable[[HttpRequest], HttpResponse]) -> Any:
         def RequestHandler(request_ptr: zt.HttpRequestPtr, response_ptr: zt.HttpResponsePtr):
             req = request_ptr.contents
@@ -55,7 +75,8 @@ def route(path: str):
                 headers=request_headers,
             )
 
-            response_object = fn(request_object)
+            handler_with_middleware = create_middleware_stack(fn, *middleware_list)
+            response_object = handler_with_middleware(request_object)
 
             res = response_ptr.contents
             res.body = response_object.body.encode('utf-8')
@@ -81,7 +102,7 @@ def _run_server(server_addr, server_port):
 server_thread = None
 
 
-def run_server(server_addr, server_port):
+def run_server(server_addr: str = "127.0.0.1", server_port: int = 1234):
     global server_thread
     server_thread = threading.Thread(target=_run_server(server_addr, server_port))
     server_thread.start()

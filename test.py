@@ -1,4 +1,31 @@
-from py.router import HttpRequest, HttpResponse, route, run_server
+import time
+
+from py.router import Handler, HttpRequest, HttpResponse, route, middleware, run_server
+
+@middleware
+def logging(request: HttpRequest, handler: Handler) -> HttpResponse:
+    start = time.time()
+    response = handler(request)
+    end = time.time() - start
+    print(f"Request - Path: {request.path}, Time: {end * 1_000 * 1_000 }μs")
+    return response
+
+
+@middleware
+def auth(request: HttpRequest, handler: Handler) -> HttpResponse:
+    print("running auth")
+    auth = False
+    for header in request.headers:
+        if header["name"] == "Auth":
+            auth = True
+
+    if not auth:
+        resp = HttpResponse(status=403)
+        print(resp.status)
+        return resp
+
+    print("auth passed")
+    return handler(request)
 
 
 @route("/home")
@@ -12,7 +39,4 @@ def blog(request: HttpRequest) -> HttpResponse:
 
 
 if __name__ == "__main__":
-    server_addr = "127.0.0.1"
-    server_port = 1234
-
-    run_server(server_addr, server_port)
+    run_server()

@@ -1,4 +1,5 @@
 const std = @import("std");
+const http = @import("http.zig");
 
 var should_exit = false;
 
@@ -6,7 +7,7 @@ var should_exit = false;
 
 const Route = struct {
     path: []const u8,
-    handler: HandlerFn,
+    handler: http.HandlerFn,
 };
 
 var routes: [10]Route = undefined;
@@ -14,7 +15,7 @@ var route_count: usize = 0;
 
 /// Register a route
 /// ctypes.c_char_p from python are ALLEGEDLY null terminated, so we can [*:0].
-export fn register_route(path: [*:0]const u8, handler: HandlerFn) void {
+export fn register_route(path: [*:0]const u8, handler: http.HandlerFn) void {
     if (route_count >= 10) return;
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -70,10 +71,13 @@ pub export fn run_server(server_addr: [*:0]const u8, server_port: u16) void {
     };
     defer server.deinit();
 
-    _run_server(&server);
+    _run_server(&server) catch |err| {
+        std.debug.print("error running server: {any}\n", .{err});
+        @panic("_run_server");
+    };
 }
 
-fn _run_server(server: *std.net.Server) void {
+fn _run_server(server: *std.net.Server) !void {
     std.debug.print("Running server on {any}\n", .{server.listen_address});
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -112,15 +116,10 @@ fn _run_server(server: *std.net.Server) void {
     std.debug.print("Shutting down...\n", .{});
 }
 
-pub const Header = extern struct {
-    key: [*:0]const u8,
-    value: [*:0]const u8,
-};
-
 fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Request) !void {
     std.debug.print("Handling request for {s}\n", .{request.head.target});
 
-    var res = HttpResponse{
+    var res = http.Response{
         .body = null,
         .content_type = null,
         .status = 0,
@@ -141,17 +140,17 @@ fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Reques
                 num_headers += 1;
             }
 
-            const headers = try allocator.alloc(Header, num_headers);
+            const headers = try allocator.alloc(http.Header, num_headers);
 
             var header_iterator = request.iterateHeaders();
             var index: usize = 0;
             while (header_iterator.next()) |header| {
-                headers[index] = Header{ .key = try allocator.dupeZ(u8, header.name), .value = try allocator.dupeZ(u8, header.value) };
+                headers[index] = http.Header{ .key = try allocator.dupeZ(u8, header.name), .value = try allocator.dupeZ(u8, header.value) };
                 index += 1;
             }
 
             const null_terminated_path = try allocator.dupeZ(u8, request.head.target);
-            const req = HttpRequest{
+            var req = http.Request{
                 .path = null_terminated_path,
                 .method = @tagName(request.head.method),
                 .body = body.ptr,
@@ -161,36 +160,19 @@ fn handle_request(allocator: std.mem.Allocator, request: *std.http.Server.Reques
             };
             const handler = routes[i].handler;
             handler(&req, &res);
+            std.debug.print("Response: {}", .{res.status});
         }
     }
 
+    if (res.status == 0) {
+        try request.respond("404 Not Found\n", .{ .status = std.http.Status.not_found });
+    }
+
+    const status: std.http.Status = @enumFromInt(res.status);
+    var body: []const u8 = "";
     if (res.body != null) {
-        try request.respond(std.mem.span(res.body.?), .{});
+        body = std.mem.span(res.body.?);
     }
 
-    try request.respond("404 Not Found\n", .{ .status = std.http.Status.not_found });
-}
-
-pub const HttpRequest = extern struct {
-    method: [*:0]const u8,
-    path: [*:0]const u8,
-    body: [*]const u8,
-    body_len: usize,
-    headers: [*]Header,
-    num_headers: usize,
-};
-
-pub const HttpResponse = extern struct {
-    body: ?[*:0]const u8,
-    content_type: ?[*:0]const u8,
-    status: c_int,
-};
-
-pub const HandlerFn = *const fn (*const HttpRequest, *HttpResponse) callconv(.C) void;
-
-fn dump(data: anytype) void {
-    const T = @TypeOf(data);
-    inline for (@typeInfo(T).@"struct".fields) |field| {
-        std.debug.print("{s}: {any}\n", .{ field.name, @field(data, field.name) });
-    }
+    try request.respond(body, std.http.Server.Request.RespondOptions{ .status = status });
 }
