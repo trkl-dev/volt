@@ -24,6 +24,7 @@ class HttpRequest(ctypes.Structure):
 class HttpResponse(ctypes.Structure):
     _fields_ = [
         ("body", ctypes.c_char_p),
+        ("body_len", ctypes.c_size_t),
         ("content_type", ctypes.c_char_p),
         ("status", ctypes.c_int),
         ("headers", ctypes.POINTER(Header)),
@@ -33,12 +34,16 @@ class HttpResponse(ctypes.Structure):
 
 CALLBACK = ctypes.CFUNCTYPE(None, ctypes.POINTER(HttpRequest), ctypes.POINTER(HttpResponse))
 
+class Route(ctypes.Structure):
+    _fields_ = [
+        ("path", ctypes.c_char_p),
+        ("handler", CALLBACK),
+    ]
+
 
 lib = ctypes.CDLL('zig-out/lib/libvolt.so')
-lib.register_route.argtypes = [ctypes.c_char_p, CALLBACK]
-lib.register_route.restype = None
 
-lib.run_server.argtypes = [ctypes.c_char_p, ctypes.c_uint16]
+lib.run_server.argtypes = [ctypes.c_char_p, ctypes.c_uint16, ctypes.POINTER(Route), ctypes.c_uint16]
 lib.run_server.restype = None
 
 lib.shutdown_server.argtypes = []

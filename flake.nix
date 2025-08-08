@@ -13,15 +13,33 @@
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
-        # pkgs = nixpkgs.legacyPackages.${system};
-        pkgs = import nixpkgs { system = "x86_64-linux"; config.allowUnfree = true; };
+        pkgs = import nixpkgs { system = system; config.allowUnfree = true; };
         nativeBuildInputs = with pkgs; [
           zig
           python3
+          sqlc
+          postgresql
+          lldb
         ];
         buildInputs = with pkgs; [];
+
+        python = pkgs.python3;
+        pythonEnv = python.withPackages (ps: [
+          ps.psycopg
+          ps.psycopg2-binary
+          ps.psycopg-pool
+          ps.sqlalchemy
+        ]);
       in {
-        devShells.default = pkgs.mkShell {inherit nativeBuildInputs buildInputs;};
+        devShells.default = pkgs.mkShell {
+          name = "volt-shell";
+
+          inherit nativeBuildInputs;
+
+          buildInputs = [
+            pythonEnv
+          ];
+        };
       }
     );
 }

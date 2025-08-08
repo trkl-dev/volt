@@ -59,6 +59,11 @@ def middleware(fn: Callable[[HttpRequest, Handler], HttpResponse]):
     middleware_list.append(fn)
     return None
 
+path_list: List[bytes] = []
+
+RouteRegister = TypedDict('RouteRegister', {'path': bytes, 'handler': Callable[[HttpRequest], HttpResponse]})
+routes: List[RouteRegister] = []
+
 def route(path: str):
     """Register a route handler on 'path'"""
     def decorator(fn: Callable[[HttpRequest], HttpResponse]) -> Any:
@@ -84,7 +89,11 @@ def route(path: str):
             response_object = handler_with_middleware(request_object)
 
             res = response_ptr.contents
+            print(f"encoding body: {response_object.body.encode('utf-8')}")
             res.body = response_object.body.encode('utf-8')
+            res.body_len = len(response_object.body.encode('utf-8'))
+            # buf = ctypes.create_string_buffer(b"foo:bar")
+            # lib.use_string(buf)
             res.content_type = response_object.content_type.encode('utf-8')
             res.status = response_object.status
             
@@ -99,8 +108,13 @@ def route(path: str):
             res.headers = header_array
 
         cb = zt.CALLBACK(RequestHandler)
-        # _registered_callbacks.append(cb) # Prevent GC
-        zt.lib.register_route(path.encode('utf-8'), cb)
+        p = path.encode('utf-8')
+        print("py: registering_route: ", p)
+        path_list.append(p)  # Prevent GC of path
+        routes.append({
+            'path': p,
+            'handler': cb,
+        })
         return cb
     return decorator
 
@@ -108,7 +122,14 @@ def route(path: str):
 def _run_server(server_addr, server_port):
     # TODO: Check that server_port here is only u16
     def run():
-        zt.lib.run_server(server_addr.encode('utf-8'), server_port)
+        routes_array_type = zt.Route * len(routes)
+        routes_array = routes_array_type()
+
+        for i, r in enumerate(routes):
+            routes_array[i].path = r["path"]
+            routes_array[i].handler = r["handler"]
+        
+        zt.lib.run_server(server_addr.encode('utf-8'), server_port, routes_array, len(routes))
 
     return run
 

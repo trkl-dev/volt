@@ -1,6 +1,11 @@
+import os
 import time
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
 from py.router import Handler, HttpRequest, HttpResponse, route, middleware, run_server
+from db import query
 
 @middleware
 def logging(request: HttpRequest, handler: Handler) -> HttpResponse:
@@ -30,11 +35,29 @@ def auth(request: HttpRequest, handler: Handler) -> HttpResponse:
 
 @route("/home")
 def home(request: HttpRequest) -> HttpResponse:
-    return HttpResponse("this is the homepage", headers=[{
+    db_url = os.environ["DB_URL"].replace("postgres", "postgresql+psycopg")
+    print(f"db url: {db_url}")
+    engine = create_engine(db_url, echo=True)
+
+    with Session(engine) as session:
+        querier = query.Querier(session.connection())
+        volt = querier.get_volt(id=1)
+
+    if volt is None:
+        print("Volt is None")
+    else:
+        print(volt)
+
+
+    return HttpResponse(f"this is the homepagee: {volt.stuff if volt is not None else 'b'}", headers=[{
         "name": "Something",
-        "value": "Else",
-    }]
-)
+        "value": "Elsee",
+    }])
+    # return HttpResponse(f"this is the homepagee: {volt.stuff if volt is not None else 'empty'}", headers=[{
+    #     "name": "Something",
+    #     "value": "Elsee",
+    # }])
+
 
 
 @route("/blog")

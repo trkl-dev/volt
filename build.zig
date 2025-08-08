@@ -53,12 +53,24 @@ pub fn build(b: *std.Build) void {
     //     .root_module = lib_mod,
     // });
 
-    const dylib = b.addSharedLibrary(.{
+    const dylib = b.addLibrary(std.Build.LibraryOptions{
+        // Default
+        .version = null,
+        .max_rss = 0,
+        .use_llvm = null,
+        .use_lld = null,
+        .zig_lib_dir = null,
+        .win32_manifest = null,
+
+        // Non default
         .name = "volt",
         .root_module = lib_mod,
         // .target = target,
-        .optimize = optimize,
+        // .optimize = optimize,
+        .linkage = .dynamic,
     });
+
+    dylib.linkLibC();
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
@@ -105,6 +117,16 @@ pub fn build(b: *std.Build) void {
     const lib_unit_tests = b.addTest(.{
         .root_module = lib_mod,
     });
+
+    const lldb = b.addSystemCommand(&.{
+        "lldb",
+        "--",
+    });
+
+    lldb.addArtifactArg(lib_unit_tests);
+
+    const lldb_step = b.step("debug", "run the unit tests under lldb");
+    lldb_step.dependOn(&lldb.step);
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
