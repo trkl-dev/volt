@@ -1,6 +1,11 @@
 import ctypes
+import faulthandler
 
 from typing import TYPE_CHECKING, Any
+
+
+# Better logging of panic errors
+faulthandler.enable()
 
 
 class Header(ctypes.Structure):
@@ -24,7 +29,7 @@ class HttpRequest(ctypes.Structure):
 class HttpResponse(ctypes.Structure):
     _fields_ = [
         ("body", ctypes.c_char_p),
-        ("body_len", ctypes.c_size_t),
+        ("content_length", ctypes.c_size_t),
         ("content_type", ctypes.c_char_p),
         ("status", ctypes.c_int),
         ("headers", ctypes.POINTER(Header)),

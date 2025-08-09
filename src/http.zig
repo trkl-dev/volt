@@ -2,14 +2,14 @@ pub const Request = extern struct {
     method: [*:0]const u8,
     path: [*:0]const u8,
     body: [*]const u8,
-    body_len: usize,
+    content_length: usize,
     headers: [*]Header,
     num_headers: usize,
 };
 
 pub const Response = extern struct {
-    body: ?[*:0]const u8,
-    body_len: usize,
+    body: [*:0]const u8,
+    content_length: usize,
     content_type: ?[*:0]const u8,
     status: c_int,
     headers: [*]Header,

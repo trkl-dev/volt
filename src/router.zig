@@ -71,7 +71,9 @@ fn runServer(
         if (stop_iter > 0 and num_iters >= stop_iter) {
             break;
         }
-        num_iters += 1;
+        if (stop_iter > 0) {
+            num_iters += 1;
+        }
         const connection = server.accept() catch |err| {
             if (err == error.WouldBlock) {
                 // std.debug.print("waiting...\n", .{});
@@ -235,7 +237,7 @@ test registerRoutes {
 fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.http.Server.Request) !void {
     std.debug.print("Handling request for {s}\n", .{request.head.target});
 
-    var res = http.Response{ .body = null, .body_len = 0, .content_type = null, .status = 0, .headers = &.{}, .num_headers = 0 };
+    var res = http.Response{ .body = undefined, .content_length = 0, .content_type = null, .status = 0, .headers = &.{}, .num_headers = 0 };
 
     std.debug.print("server state: {s}\n", .{@tagName(request.server.state)});
 
@@ -295,7 +297,7 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
                 .path = null_terminated_path,
                 .method = @tagName(request.head.method),
                 .body = body.ptr,
-                .body_len = content_length,
+                .content_length = content_length,
                 .headers = headers.ptr,
                 .num_headers = num_headers,
             };
@@ -304,7 +306,9 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
             std.debug.print("header name: {s}\n", .{headers[1].name});
             std.debug.print("server state pre handler: {s}\n", .{@tagName(request.server.state)});
             const handler = route.handler;
+
             handler(&req, &res);
+            std.debug.print("route handling complete\n", .{});
             std.debug.print("server state post handler: {s}\n", .{@tagName(request.server.state)});
 
             break;
@@ -320,11 +324,8 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
     std.debug.print("server state: {s}\n", .{@tagName(request.server.state)});
     const status: std.http.Status = @enumFromInt(res.status);
     var body: []const u8 = "";
-    if (res.body != null) {
-        body = res.body.?[0..res.body_len];
-        // body = std.mem.span(res.body.?);
-    }
-    // std.debug.print("response body: {any}\n", .{res.body});
+    body = std.mem.span(res.body);
+    std.debug.print("response body: {s}\n", .{res.body});
 
     const header_list = try allocator.alloc(std.http.Header, res.num_headers);
     defer allocator.free(header_list);
@@ -336,7 +337,7 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
     }
 
     for (header_list) |header| {
-        std.debug.print("response header name: {s}, value: {s}", .{ header.name, header.value });
+        std.debug.print("response header name: {s}, value: {s}\n", .{ header.name, header.value });
     }
 
     std.debug.print("body: {s}\n", .{body});

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from py.router import Handler, HttpRequest, HttpResponse, route, middleware, run_server
 from db import query
 
+
 @middleware
 def logging(request: HttpRequest, handler: Handler) -> HttpResponse:
     start = time.time()
@@ -36,7 +37,6 @@ def auth(request: HttpRequest, handler: Handler) -> HttpResponse:
 @route("/home")
 def home(request: HttpRequest) -> HttpResponse:
     db_url = os.environ["DB_URL"].replace("postgres", "postgresql+psycopg")
-    print(f"db url: {db_url}")
     engine = create_engine(db_url, echo=True)
 
     with Session(engine) as session:
@@ -48,21 +48,20 @@ def home(request: HttpRequest) -> HttpResponse:
     else:
         print(volt)
 
-
-    return HttpResponse(f"this is the homepagee: {volt.stuff if volt is not None else 'b'}", headers=[{
-        "name": "Something",
-        "value": "Elsee",
-    }])
-    # return HttpResponse(f"this is the homepagee: {volt.stuff if volt is not None else 'empty'}", headers=[{
-    #     "name": "Something",
-    #     "value": "Elsee",
-    # }])
-
+    return HttpResponse(
+        f"this is the homepage. Volt DB response: {volt.stuff if volt is not None else 'None'}",
+        headers=[{
+            "name": "Something",
+            "value": "Elsee",
+        }]
+    )
 
 
 @route("/blog")
 def blog(request: HttpRequest) -> HttpResponse:
-    return HttpResponse("this is the blog page")
+    import time
+    time.sleep(0.1)
+    return HttpResponse("this is the blog pages% aslkdjasldkjasdkjhasdflkajsdhfalskshdahsdkjhakdfjhasdlfkjhasdfl\n%jh")
 
 
 if __name__ == "__main__":

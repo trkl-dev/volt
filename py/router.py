@@ -8,7 +8,9 @@ from typing import Any, Optional, TypedDict, List
 
 from . import zig_types as zt
 
+
 Header = TypedDict('Header', {'name': str, 'value': str})
+
 
 class HttpRequest:
     method: str
@@ -40,34 +42,48 @@ class HttpResponse:
         if headers is not None:
             self.headers = headers
 
+
 type Middleware = Callable[[HttpRequest, Handler], HttpResponse]
 type Handler = Callable[[HttpRequest], HttpResponse]
+
 
 def wrap_middleware(middleware: Middleware, handler: Handler) -> Handler:
     def wrapped(request: HttpRequest):
         return middleware(request, handler)
     return wrapped
 
+
 def create_middleware_stack(handler: Handler, *middlewares: Middleware) -> Handler:
     for middleware in reversed(middlewares):
         handler = wrap_middleware(middleware, handler)
     return handler
 
+
 middleware_list: List[Middleware]= []
+
 
 def middleware(fn: Callable[[HttpRequest, Handler], HttpResponse]):
     middleware_list.append(fn)
     return None
 
+
 path_list: List[bytes] = []
+
 
 RouteRegister = TypedDict('RouteRegister', {'path': bytes, 'handler': Callable[[HttpRequest], HttpResponse]})
 routes: List[RouteRegister] = []
 
+
+def c_encode_string(string: str) -> tuple[ctypes.c_char_p, int]:
+    encoded = string.encode('utf-8')
+    buffer = ctypes.create_string_buffer(encoded, len(encoded) + 1)
+    return ctypes.cast(buffer, ctypes.c_char_p), len(encoded)
+
+
 def route(path: str):
     """Register a route handler on 'path'"""
-    def decorator(fn: Callable[[HttpRequest], HttpResponse]) -> Any:
-        def RequestHandler(request_ptr: zt.HttpRequestPtr, response_ptr: zt.HttpResponsePtr):
+    def decorator(handler_fn: Callable[[HttpRequest], HttpResponse]) -> Any:
+        def request_handler(request_ptr: zt.HttpRequestPtr, response_ptr: zt.HttpResponsePtr):
             req = request_ptr.contents
 
             request_headers = []
@@ -85,29 +101,39 @@ def route(path: str):
                 headers=request_headers,
             )
 
-            handler_with_middleware = create_middleware_stack(fn, *middleware_list)
-            response_object = handler_with_middleware(request_object)
+            handler_with_middleware = create_middleware_stack(handler_fn, *middleware_list)
+            handler_response = handler_with_middleware(request_object)
 
-            res = response_ptr.contents
-            print(f"encoding body: {response_object.body.encode('utf-8')}")
-            res.body = response_object.body.encode('utf-8')
-            res.body_len = len(response_object.body.encode('utf-8'))
-            # buf = ctypes.create_string_buffer(b"foo:bar")
-            # lib.use_string(buf)
-            res.content_type = response_object.content_type.encode('utf-8')
-            res.status = response_object.status
+            response = response_ptr.contents
+
+
+            # NOTE: Was previously directly assigning response_body to response.body, rather than using string_buffer.
+            # Something about this was allowing GC to cause issues with the response body not persisting, and being 
+            # collected. Using string_buffer _seems_ to create an additional reference that otherwise would not exist,
+            # which seems to have prevented GC. That being said, rigorous simulation testing on this, and other fields
+            # to ensure GC is not still occurring at random is necessary. Ideally a better understanding in general too.
+            # response.body = handler_response.body.encode('utf-8')
+            response.body, response.content_length = c_encode_string(handler_response.body)
+
+            # Content-Type parsing/handling
+            response_content_type = handler_response.content_type.encode('utf-8')
+            response_content_type_buffer = ctypes.create_string_buffer(response_content_type)
+
+            response.content_type = ctypes.cast(response_content_type_buffer, ctypes.c_char_p)
+
+            response.status = handler_response.status
             
-            header_array_type = zt.Header * len(response_object.headers)
+            header_array_type = zt.Header * len(handler_response.headers)
             header_array = header_array_type()
 
-            res.num_headers = len(response_object.headers)
-            for i, h in enumerate(response_object.headers):
-                header_array[i].name = h["name"].encode('utf-8')
-                header_array[i].value = h["value"].encode('utf-8')
+            response.num_headers = len(handler_response.headers)
+            for i, h in enumerate(handler_response.headers):
+                header_array[i].name, _ = c_encode_string(h["name"])
+                header_array[i].value, _ = c_encode_string(h["value"])
 
-            res.headers = header_array
+            response.headers = header_array
 
-        cb = zt.CALLBACK(RequestHandler)
+        cb = zt.CALLBACK(request_handler)
         p = path.encode('utf-8')
         print("py: registering_route: ", p)
         path_list.append(p)  # Prevent GC of path
@@ -116,6 +142,7 @@ def route(path: str):
             'handler': cb,
         })
         return cb
+        
     return decorator
 
 
