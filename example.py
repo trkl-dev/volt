@@ -59,8 +59,6 @@ def home(request: HttpRequest) -> HttpResponse:
 
 @route("/blog")
 def blog(request: HttpRequest) -> HttpResponse:
-    import time
-    time.sleep(0.1)
     return HttpResponse("this is the blog pages% aslkdjasldkjasdkjhasdflkajsdhfalskshdahsdkjhakdfjhasdlfkjhasdfl\n%jh")
 
 

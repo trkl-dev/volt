@@ -1,34 +1,32 @@
 const std = @import("std");
 const http = @import("http.zig");
+const middleware = @import("middleware.zig");
 
 const expect = std.testing.expect;
+
+const log = std.log.scoped(.zig);
+const test_log = std.log.scoped(.zig_test);
 
 var num_active_threads: u8 = 0;
 
 pub export fn run_server(server_addr: [*:0]const u8, server_port: u16, routes_to_register: [*]http.Route, num_routes: u16) void {
-    std.debug.print("run_server called\n", .{});
+    log.debug("run_server called", .{});
     var gpa = std.heap.DebugAllocator(.{}).init;
     const allocator = gpa.allocator();
 
     var arena = std.heap.ArenaAllocator.init(allocator);
-    defer {
-        std.debug.print("running areana.deinit()\n", .{});
-        arena.deinit();
-    }
+    defer arena.deinit();
 
     const arena_allocator = arena.allocator();
 
     const routes = registerRoutes(arena_allocator, routes_to_register, num_routes) catch |err| {
-        std.debug.print("error registering routes: {any}\n", .{err});
+        log.err("error registering routes: {any}", .{err});
         @panic("_run_server");
     };
-    defer {
-        std.debug.print("running arena_allocator.free()\n", .{});
-        arena_allocator.free(routes);
-    }
+    defer arena_allocator.free(routes);
 
     runServer(allocator, server_addr, server_port, routes, 0) catch |err| {
-        std.debug.print("error running server: {any}\n", .{err});
+        log.err("error running server: {any}", .{err});
         @panic("_run_server");
     };
 }
@@ -62,7 +60,7 @@ fn runServer(
     });
     defer server.deinit();
 
-    std.debug.print("Running server on {any}\n", .{server.listen_address});
+    log.info("Running server on {any}", .{server.listen_address});
 
     var num_iters: u16 = 0;
     // Continue checking for new connections. New connections are given a separate thread to be handled in.
@@ -76,16 +74,15 @@ fn runServer(
         }
         const connection = server.accept() catch |err| {
             if (err == error.WouldBlock) {
-                // std.debug.print("waiting...\n", .{});
                 std.time.sleep(10 * std.time.ns_per_ms);
                 continue;
             } else {
-                std.debug.print("Connection error: {}\n", .{err});
+                log.err("Connection error: {}", .{err});
                 continue;
             }
         };
 
-        std.debug.print("Handling new connection\n", .{});
+        log.debug("Handling new connection", .{});
 
         // Give each new connection a new thread.
         // TODO: This should probably be a threadpool
@@ -94,18 +91,16 @@ fn runServer(
             handleConnection,
             .{ allocator, connection, routes },
         );
-        std.debug.print("Thread spawned\n", .{});
+        log.debug("Thread spawned", .{});
         if (thread_result) |thread| {
-            std.debug.print("Thread detached\n", .{});
             thread.detach();
         } else |err| {
-            std.debug.print("Failed to spawn thread: {any}\n", .{err});
+            log.err("Failed to spawn thread: {any}", .{err});
+            continue;
         }
-
-        std.debug.print("thread count: {d}\n", .{num_active_threads});
     }
 
-    std.debug.print("Shutting down...\n", .{});
+    log.info("Shutting down...", .{});
 }
 
 test runServer {
@@ -154,16 +149,16 @@ test runServer {
 }
 
 fn testHandlerSuccessful(request: *http.Request, response: *http.Response) callconv(.C) void {
-    std.debug.print("handler: {}, {}\n", .{ request, response });
-    std.debug.print("header name: {s}\n", .{request.headers[1].name});
+    test_log.debug("handler: {}, {}", .{ request, response });
+    test_log.debug("header name: {s}", .{request.headers[1].name});
 
     response.status = 200;
     response.body = "hi there";
 }
 
 fn testHandlerForbidden(request: *http.Request, response: *http.Response) callconv(.C) void {
-    std.debug.print("handler: {}, {}\n", .{ request, response });
-    std.debug.print("header name: {s}\n", .{request.headers[1].name});
+    test_log.debug("handler: {}, {}", .{ request, response });
+    test_log.debug("header name: {s}", .{request.headers[1].name});
 
     response.status = 403;
 }
@@ -171,7 +166,7 @@ fn testHandlerForbidden(request: *http.Request, response: *http.Response) callco
 fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Connection, routes: []Route) void {
     num_active_threads += 1;
     defer num_active_threads -= 1;
-    std.debug.print("starting handleConnection()\n", .{});
+
     var read_buffer: [1024]u8 = undefined;
     var http_server = std.http.Server.init(connection, &read_buffer);
 
@@ -181,12 +176,12 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
             error.HttpConnectionClosing => return,
             // error.HttpHeadersOversize => handleResponseWith431(),
             else => {
-                std.debug.print("Request error in handle connection: {any}\n", .{err});
+                log.err("Request error in handle connection: {any}", .{err});
                 return;
             },
         };
         handleRequest(allocator, routes, &request) catch |err| {
-            std.debug.print("Error handling request in handleConnection(): {any}\n", .{err});
+            log.err("Error handling request in handleConnection(): {any}", .{err});
             return;
         };
     }
@@ -202,7 +197,7 @@ fn registerRoutes(arena: std.mem.Allocator, routes_to_register: [*]const http.Ro
         routes[i].path = try arena.dupeZ(u8, std.mem.span(routes_to_register[i].name));
         routes[i].handler = routes_to_register[i].handler;
 
-        std.debug.print("zig: Route registered: {s} -> {any}\n", .{ routes[i].path, routes[i].handler });
+        log.debug("zig: Route registered: {s} -> {any}", .{ routes[i].path, routes[i].handler });
     }
 
     return routes;
@@ -235,97 +230,94 @@ test registerRoutes {
 }
 
 fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.http.Server.Request) !void {
-    std.debug.print("Handling request for {s}\n", .{request.head.target});
+    log.debug("Handling request for {s}", .{request.head.target});
 
     var res = http.Response{ .body = undefined, .content_length = 0, .content_type = null, .status = 0, .headers = &.{}, .num_headers = 0 };
 
-    std.debug.print("server state: {s}\n", .{@tagName(request.server.state)});
+    const logging_middleware = middleware.Logging.init();
 
-    for (routes) |route| {
-        std.debug.print("checking route: {s}\n", .{route.path});
-        if (std.mem.eql(u8, route.path, request.head.target)) {
-            std.debug.print("matched route: {s}\n", .{route.path});
-            var read_body: bool = true;
-            std.debug.print("server state: {s}\n", .{@tagName(request.server.state)});
-            const request_reader: ?std.io.AnyReader = request.reader() catch |err| {
-                std.debug.print("error requesting reader: {any}\n", .{err});
-                read_body = false;
-                return;
-            };
+    // CORS middleware will respond to request if allowed is false
+    if (!try middleware.CORS.allowed(request)) {
+        return;
+    }
 
-            const content_length = request.head.content_length orelse 0;
-            var body: []u8 = undefined;
-            if (read_body) {
-                body = try request_reader.?.readAllAlloc(allocator, content_length);
-            }
-
-            // Get the number of headers
-            var header_iterator_counter = request.iterateHeaders();
-            var num_headers: usize = 0;
-            while (header_iterator_counter.next()) |header| {
-                std.debug.print("request header: name: {s}, value: {s}\n", .{ header.name, header.value });
-                num_headers += 1;
-            }
-            std.debug.print("server state post header iterate 1: {s}\n", .{@tagName(request.server.state)});
-
-            const headers = try allocator.alloc(http.Header, num_headers);
-            defer allocator.free(headers);
-            std.debug.print("server state post headers: {s}\n", .{@tagName(request.server.state)});
-
-            var header_iterator = request.iterateHeaders();
-            var index: usize = 0;
-            while (header_iterator.next()) |header| {
-                const header_name = try allocator.dupeZ(u8, header.name);
-                const header_value = try allocator.dupeZ(u8, header.value);
-                headers[index] = http.Header{ .name = header_name, .value = header_value };
-                index += 1;
-            }
-
-            defer {
-                for (headers) |header| {
-                    // .free wants a slice, so we convert the null terminated strings to slices for freeing
-                    allocator.free(std.mem.span(header.name));
-                    allocator.free(std.mem.span(header.value));
-                }
-            }
-
-            std.debug.print("server state post header iterate 2: {s}\n", .{@tagName(request.server.state)});
-
-            const null_terminated_path = try allocator.dupeZ(u8, request.head.target);
-            defer allocator.free(null_terminated_path);
-            var req = http.Request{
-                .path = null_terminated_path,
-                .method = @tagName(request.head.method),
-                .body = body.ptr,
-                .content_length = content_length,
-                .headers = headers.ptr,
-                .num_headers = num_headers,
-            };
-            std.debug.print("ntp: {*}, {*}\n", .{ body.ptr, headers.ptr });
-
-            std.debug.print("header name: {s}\n", .{headers[1].name});
-            std.debug.print("server state pre handler: {s}\n", .{@tagName(request.server.state)});
-            const handler = route.handler;
-
-            handler(&req, &res);
-            std.debug.print("route handling complete\n", .{});
-            std.debug.print("server state post handler: {s}\n", .{@tagName(request.server.state)});
-
-            break;
+    var route: ?Route = null;
+    for (routes) |r| {
+        if (!std.mem.eql(u8, r.path, request.head.target)) {
+            continue;
         }
-        std.debug.print("server state outer loop: {s}\n", .{@tagName(request.server.state)});
+        route = r;
     }
 
-    if (res.status == 0) {
-        std.debug.print("##### Not found#####\n", .{});
-        try request.respond("404 Not Found\n", .{ .status = std.http.Status.not_found });
+    if (route == null) {
+        log.warn("##### Not found #####", .{});
+        try request.respond("404 Not Found", .{ .status = std.http.Status.not_found });
+        return;
     }
 
-    std.debug.print("server state: {s}\n", .{@tagName(request.server.state)});
+    log.debug("matched route: {s}", .{route.?.path});
+    var read_body: bool = true;
+    const request_reader: ?std.io.AnyReader = request.reader() catch |err| {
+        log.err("error requesting reader: {any}", .{err});
+        read_body = false;
+        return;
+    };
+
+    const content_length = request.head.content_length orelse 0;
+    var request_body: []u8 = undefined;
+    if (read_body) {
+        request_body = try request_reader.?.readAllAlloc(allocator, content_length);
+    }
+
+    // Get the number of headers
+    var header_iterator_counter = request.iterateHeaders();
+    var num_headers: usize = 0;
+    while (header_iterator_counter.next()) |header| {
+        log.debug("request header: name: {s}, value: {s}", .{ header.name, header.value });
+        num_headers += 1;
+    }
+
+    const headers = try allocator.alloc(http.Header, num_headers);
+    defer allocator.free(headers);
+
+    var header_iterator = request.iterateHeaders();
+    var index: usize = 0;
+    while (header_iterator.next()) |header| {
+        const header_name = try allocator.dupeZ(u8, header.name);
+        const header_value = try allocator.dupeZ(u8, header.value);
+        headers[index] = http.Header{ .name = header_name, .value = header_value };
+        index += 1;
+    }
+
+    defer {
+        for (headers) |header| {
+            // .free wants a slice, so we convert the null terminated strings to slices for freeing
+            allocator.free(std.mem.span(header.name));
+            allocator.free(std.mem.span(header.value));
+        }
+    }
+
+    const null_terminated_path = try allocator.dupeZ(u8, request.head.target);
+    defer allocator.free(null_terminated_path);
+    var req = http.Request{
+        .path = null_terminated_path,
+        .method = @tagName(request.head.method),
+        .body = request_body.ptr,
+        .content_length = content_length,
+        .headers = headers.ptr,
+        .num_headers = num_headers,
+    };
+
+    const handler = route.?.handler;
+
+    handler(&req, &res);
+
+    log.debug("route handling complete", .{});
+
     const status: std.http.Status = @enumFromInt(res.status);
-    var body: []const u8 = "";
-    body = std.mem.span(res.body);
-    std.debug.print("response body: {s}\n", .{res.body});
+    var response_body: []const u8 = "";
+    response_body = std.mem.span(res.body);
+    log.debug("response body: {s}", .{response_body});
 
     const header_list = try allocator.alloc(std.http.Header, res.num_headers);
     defer allocator.free(header_list);
@@ -337,16 +329,14 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
     }
 
     for (header_list) |header| {
-        std.debug.print("response header name: {s}, value: {s}\n", .{ header.name, header.value });
+        log.debug("response header name: {s}, value: {s}", .{ header.name, header.value });
     }
 
-    std.debug.print("body: {s}\n", .{body});
-    try request.respond(body, std.http.Server.Request.RespondOptions{
+    try request.respond(response_body, std.http.Server.Request.RespondOptions{
         .status = status,
         .extra_headers = header_list,
     });
-
-    std.debug.print("Handled\n", .{});
+    logging_middleware.post(request.head.target, status, request.head.method);
 }
 
 const Route = struct {
