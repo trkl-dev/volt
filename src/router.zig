@@ -232,7 +232,7 @@ test registerRoutes {
 fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.http.Server.Request) !void {
     log.debug("Handling request for {s}", .{request.head.target});
 
-    var res = http.Response{ .body = undefined, .content_length = 0, .content_type = null, .status = 0, .headers = &.{}, .num_headers = 0 };
+    var res = http.Response{ .body = "", .content_length = 0, .content_type = null, .status = 0, .headers = &.{}, .num_headers = 0 };
 
     const logging_middleware = middleware.Logging.init();
 
@@ -297,11 +297,23 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
         }
     }
 
-    const null_terminated_path = try allocator.dupeZ(u8, request.head.target);
-    defer allocator.free(null_terminated_path);
+    const path_nt = try allocator.dupeZ(u8, request.head.target);
+    defer allocator.free(path_nt);
+
+    const method = std.enums.tagName(std.http.Method, request.head.method);
+    if (method == null) {
+        // Unfortunately the original method string is lost, unless we re-parse the original request
+        log.warn("bad method", .{});
+        try request.respond("", .{ .status = std.http.Status.method_not_allowed });
+        return;
+    }
+
+    const method_nt = try allocator.dupeZ(u8, method.?);
+    defer allocator.free(method_nt);
+
     var req = http.Request{
-        .path = null_terminated_path,
-        .method = @tagName(request.head.method),
+        .path = path_nt,
+        .method = method_nt,
         .body = request_body.ptr,
         .content_length = content_length,
         .headers = headers.ptr,
@@ -315,8 +327,7 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
     log.debug("route handling complete", .{});
 
     const status: std.http.Status = @enumFromInt(res.status);
-    var response_body: []const u8 = "";
-    response_body = std.mem.span(res.body);
+    const response_body: []const u8 = std.mem.span(res.body);
     log.debug("response body: {s}", .{response_body});
 
     const header_list = try allocator.alloc(std.http.Header, res.num_headers);
