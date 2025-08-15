@@ -1,13 +1,13 @@
 const std = @import("std");
 const http = @import("http.zig");
 const middleware = @import("middleware.zig");
+const routing = @import("routing.zig");
 
+const Route = routing.Route;
 const expect = std.testing.expect;
 
 const log = std.log.scoped(.zig);
 const test_log = std.log.scoped(.zig_test);
-
-var num_active_threads: u8 = 0;
 
 pub export fn run_server(server_addr: [*:0]const u8, server_port: u16, routes_to_register: [*]http.Route, num_routes: u16) void {
     log.debug("run_server called", .{});
@@ -164,9 +164,6 @@ fn testHandlerForbidden(request: *http.Request, response: *http.Response) callco
 }
 
 fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Connection, routes: []Route) void {
-    num_active_threads += 1;
-    defer num_active_threads -= 1;
-
     var read_buffer: [1024]u8 = undefined;
     var http_server = std.http.Server.init(connection, &read_buffer);
 
@@ -241,14 +238,7 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
         return;
     }
 
-    var route: ?Route = null;
-    for (routes) |r| {
-        if (!std.mem.eql(u8, r.path, request.head.target)) {
-            continue;
-        }
-        route = r;
-    }
-
+    const route = routing.getRoute(routes, request.head.target);
     if (route == null) {
         log.warn("##### Not found #####", .{});
         try request.respond("404 Not Found", .{ .status = std.http.Status.not_found });
@@ -350,24 +340,24 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
     logging_middleware.post(request.head.target, status, request.head.method);
 }
 
-const Route = struct {
-    path: []const u8,
-    handler: http.HandlerFn,
-
-    pub fn format(
-        self: Route,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
-        writer: anytype,
-    ) !void {
-        _ = fmt;
-        _ = options;
-
-        try writer.print("{s} ({})", .{
-            self.path, self.handler,
-        });
-    }
-};
+// const Route = struct {
+//     path: []const u8,
+//     handler: http.HandlerFn,
+//
+//     pub fn format(
+//         self: Route,
+//         comptime fmt: []const u8,
+//         options: std.fmt.FormatOptions,
+//         writer: anytype,
+//     ) !void {
+//         _ = fmt;
+//         _ = options;
+//
+//         try writer.print("{s} ({})", .{
+//             self.path, self.handler,
+//         });
+//     }
+// };
 
 var should_exit = false;
 
