@@ -18,13 +18,15 @@ class HttpRequest:
     body: str
     body_len: int
     headers: list[Header]
+    query_params: dict[str, str]
 
-    def __init__(self, method: str, path: str, body: str, body_len: int, headers: list[Header]) -> None:
+    def __init__(self, method: str, path: str, body: str, body_len: int, headers: list[Header], query_params: dict[str, str]) -> None:
         self.method = method
         self.path = path
         self.body = body
         self.body_len = body_len
         self.headers = headers
+        self.query_params = query_params
 
 
 class HttpResponse:
@@ -70,7 +72,7 @@ def middleware(fn: Callable[[HttpRequest, Handler], HttpResponse]):
 path_list: List[bytes] = []
 
 
-RouteRegister = TypedDict('RouteRegister', {'path': bytes, 'handler': Callable[[HttpRequest], HttpResponse]})
+RouteRegister = TypedDict('RouteRegister', {'path': bytes, 'method': bytes, 'handler': Callable[[HttpRequest], HttpResponse]})
 routes: List[RouteRegister] = []
 
 
@@ -80,11 +82,37 @@ def c_encode_string(string: str) -> tuple[ctypes.c_char_p, int]:
     return ctypes.cast(buffer, ctypes.c_char_p), len(encoded)
 
 
-def route(path: str):
+def route(path: str, method: str = "GET"):
     """Register a route handler on 'path'"""
     def decorator(handler_fn: Callable[[HttpRequest], HttpResponse]) -> Any:
         def request_handler(request_ptr: zt.HttpRequestPtr, response_ptr: zt.HttpResponsePtr):
             req = request_ptr.contents
+
+            size = zt.lib.query_params_size(request_ptr)
+            keys_array = (ctypes.c_char_p * size)()
+            key_lengths_array = (ctypes.c_size_t * size)()
+            num_keys = zt.lib.query_params_get_keys(
+                request_ptr,
+                keys_array,
+                key_lengths_array,
+                size
+            )
+            
+            # raise Exception()
+            query_params = {}
+            for i in range(num_keys):
+                if keys_array[i]:
+                    key_bytes = ctypes.string_at(keys_array[i], key_lengths_array[i])
+                    key = key_bytes.decode('utf-8')
+
+                    value_out = ctypes.c_char_p()
+                    size = zt.lib.query_params_get_value(request_ptr, key_bytes, ctypes.byref(value_out))
+                    if size == 0:
+                        raise Exception(f"Somehow we have a key: {key}, that can not be found")
+                    value_bytes = ctypes.string_at(value_out, size)
+                    value = value_bytes.decode('utf-8')
+                    
+                    query_params[key] = value
 
             request_headers = []
             for i in range(req.num_headers):
@@ -99,6 +127,7 @@ def route(path: str):
                 body=ctypes.string_at(req.body, req.body_len).decode('utf-8'),
                 body_len=req.body_len,
                 headers=request_headers,
+                query_params=query_params,
             )
 
             handler_with_middleware = create_middleware_stack(handler_fn, *middleware_list)
@@ -139,6 +168,7 @@ def route(path: str):
         path_list.append(p)  # Prevent GC of path
         routes.append({
             'path': p,
+            'method': method.encode('utf-8'),
             'handler': cb,
         })
         return cb
@@ -154,6 +184,7 @@ def _run_server(server_addr, server_port):
 
         for i, r in enumerate(routes):
             routes_array[i].path = r["path"]
+            routes_array[i].method = r["method"]
             routes_array[i].handler = r["handler"]
         
         zt.lib.run_server(server_addr.encode('utf-8'), server_port, routes_array, len(routes))

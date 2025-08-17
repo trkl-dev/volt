@@ -1,7 +1,7 @@
 const std = @import("std");
 const http = @import("http.zig");
 
-const logging_middleware_log = std.log.scoped(.zig_requests);
+const logging_middleware_log = std.log.scoped(.zig_middleware);
 
 pub const Logging = struct {
     start_time: i64,

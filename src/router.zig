@@ -113,10 +113,12 @@ test runServer {
     const r = [_]http.Route{
         .{
             .name = "/blog",
+            .method = "GET",
             .handler = testHandlerSuccessful,
         },
         .{
             .name = "/home",
+            .method = "GET",
             .handler = testHandlerForbidden,
         },
     };
@@ -191,6 +193,7 @@ fn registerRoutes(arena: std.mem.Allocator, routes_to_register: [*]const http.Ro
 
     var i: usize = 0;
     while (i < num_routes) : (i += 1) {
+        routes[i].method = @enumFromInt(std.http.Method.parse(std.mem.span(routes_to_register[i].method)));
         routes[i].path = try arena.dupeZ(u8, std.mem.span(routes_to_register[i].name));
         routes[i].handler = routes_to_register[i].handler;
 
@@ -209,10 +212,12 @@ test registerRoutes {
     const r = [_]http.Route{
         .{
             .name = "/blog",
+            .method = "GET",
             .handler = testHandlerSuccessful,
         },
         .{
             .name = "/home",
+            .method = "GET",
             .handler = testHandlerSuccessful,
         },
     };
@@ -238,14 +243,20 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
         return;
     }
 
-    const route = routing.getRoute(routes, request.head.target);
-    if (route == null) {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var router = routing.Router.init(arena_allocator, routes);
+    var matched_route = try router.match(request.head.method, request.head.target);
+    // const route = routing.getRoute(routes, request.head.target);
+    if (matched_route == null) {
         log.warn("##### Not found #####", .{});
         try request.respond("404 Not Found", .{ .status = std.http.Status.not_found });
         return;
     }
 
-    log.debug("matched route: {s}", .{route.?.path});
+    log.debug("matched route: {s}", .{matched_route.?.route.path});
     var read_body: bool = true;
     const request_reader: ?std.io.AnyReader = request.reader() catch |err| {
         log.err("error requesting reader: {any}", .{err});
@@ -308,11 +319,17 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
         .content_length = content_length,
         .headers = headers.ptr,
         .num_headers = num_headers,
+        .query_params = &matched_route.?.query_params,
+        // .route_params = matched_route.?.route_params,
     };
 
-    const handler = route.?.handler;
+    const handler = matched_route.?.route.handler;
 
     handler(&req, &res);
+    if (res.status == 0) {
+        try request.respond("", .{ .status = std.http.Status.internal_server_error });
+        return error.UnknownErrorInPythonCallback;
+    }
 
     log.debug("route handling complete", .{});
 
