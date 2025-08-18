@@ -1,6 +1,7 @@
 import ctypes
 import faulthandler
 
+import platform
 from typing import TYPE_CHECKING, Any
 
 
@@ -86,6 +87,15 @@ class Route(ctypes.Structure):
         ("handler", CALLBACK),
     ]
 
+
+lib = None
+if platform.system() == 'Darwin':
+    lib = ctypes.CDLL('zig-out/lib/libvolt.dylib')
+else:
+    lib = ctypes.CDLL('zig-out/lib/libvolt.so')
+
+if lib is None:
+    raise Exception("Failed to load libvolt")
 
 
 lib.run_server.argtypes = [ctypes.c_char_p, ctypes.c_uint16, ctypes.POINTER(Route), ctypes.c_uint16]
