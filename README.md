@@ -35,25 +35,28 @@ def logging(request: HttpRequest, handler: Handler) -> HttpResponse:
     return response
 
 
-@route("/home")
+@route("/blogs/{id:int}")
 def home(request: HttpRequest) -> HttpResponse:
     db_url = os.environ["DB_URL"].replace("postgres", "postgresql+psycopg")
     engine = create_engine(db_url, echo=True)
 
     with Session(engine) as session:
         querier = query.Querier(session.connection())
-        volt = querier.get_volt(id=1)
+        volt = querier.get_volt(id=request.route_params['id'])
 
     return HttpResponse(
         f"this is the homepage. Volt DB response: {volt.stuff if volt is not None else 'None'}",
         headers=[{"name": "custom", "value": "header"}]
     )
 
-@route("/blog")
+@route("/blog?sortby=name")
 def blog(request: HttpRequest) -> HttpResponse:
+    assert request.query_params['sortby'] == name
+
     import time
     time.sleep(0.1)
-    return HttpResponse("this is the blog page")
+
+    return HttpResponse(f"this is the blog page, sorted by: {request.query_params['sortby']}")
 
 
 if __name__ == "__main__":
