@@ -20,7 +20,11 @@ pub const Router = struct {
                 continue;
             }
 
-            const params = try self.matchPath(route.path, path) orelse continue;
+            const params = self.matchPath(route.path, path) catch |err| {
+                log.err("Error matching route: {s}", .{route});
+                return err;
+            } orelse continue;
+
             return MatchedRoute{
                 .route = route,
                 .allocator = self.arena_allocator,
@@ -33,7 +37,7 @@ pub const Router = struct {
 
     fn matchPath(self: *Router, template: []const u8, actual: []const u8) !?Params {
         log.debug("matching path", .{});
-        var route_params = std.StringHashMap(RouteParamValue).init(self.arena_allocator);
+        var route_params = std.StringHashMap(http.RouteParamValue).init(self.arena_allocator);
         errdefer route_params.deinit();
 
         var template_parts = std.mem.splitScalar(u8, template, '/');
@@ -50,7 +54,10 @@ pub const Router = struct {
 
             // Handle route params: /{username:str} or /{id:int}, etc
             if (template_part.len >= 3 and template_part[0] == '{' and template_part[template_part.len - 1] == '}') {
-                const route_param = try parse_route_params(template_part, actual_part);
+                const route_param = parse_route_params(template_part, actual_part) orelse {
+                    route_params.deinit();
+                    return null;
+                };
                 try route_params.put(route_param.name, route_param.value);
             } else {
                 if (!std.mem.eql(u8, actual_part, template_part)) {
@@ -70,7 +77,7 @@ pub const Router = struct {
 
         // If there are still remaining template segments, then we have not matched on an entire path,
         // so we return null
-        if (template_parts.next() != null) {
+        if (actual_parts.next() != null) {
             route_params.deinit();
             query_params.deinit();
             return null;
@@ -103,14 +110,14 @@ pub const Route = struct {
 };
 
 pub const Params = struct {
-    route_params: std.StringHashMap(RouteParamValue),
+    route_params: std.StringHashMap(http.RouteParamValue),
     query_params: std.StringHashMap([]const u8),
 };
 
 pub const MatchedRoute = struct {
     allocator: std.mem.Allocator,
     route: Route,
-    route_params: std.StringHashMap(RouteParamValue),
+    route_params: std.StringHashMap(http.RouteParamValue),
     query_params: std.StringHashMap([]const u8),
 
     pub fn deinit(self: *MatchedRoute) void {
@@ -144,24 +151,9 @@ pub const MatchedRoute = struct {
     }
 };
 
-const ParamType = enum {
-    int,
-    str,
-};
-
-const RouteParam = struct {
-    name: []const u8,
-    value: RouteParamValue,
-};
-
-const RouteParamValue = union(ParamType) {
-    int: i32,
-    str: []const u8,
-};
-
 /// Parse a given route parameter as per a given template string of the form:
 /// {param_name:param_type} where param_type can be either int or str
-fn parse_route_params(template_param: []const u8, actual_param: []const u8) !RouteParam {
+fn parse_route_params(template_param: []const u8, actual_param: []const u8) ?http.RouteParam {
     std.debug.assert(template_param[0] == '{');
     std.debug.assert(template_param[template_param.len - 1] == '}');
 
@@ -171,15 +163,20 @@ fn parse_route_params(template_param: []const u8, actual_param: []const u8) !Rou
     var param_parts = std.mem.splitScalar(u8, param_def, ':');
     const param_name = param_parts.first();
 
-    const param_type_str = param_parts.next() orelse return error.ParamTypeIsNull;
-    const param_type = std.meta.stringToEnum(ParamType, param_type_str) orelse return error.ParamTypeIsnNull;
+    const param_type_str = param_parts.next() orelse return null;
+    log.debug("param type str: {s}", .{param_type_str});
+    const param_type = std.meta.stringToEnum(http.ParamType, param_type_str) orelse return null;
+    log.debug("param type: {any}", .{param_type});
     switch (param_type) {
         .str => {
-            return RouteParam{ .name = param_name, .value = RouteParamValue{ .str = actual_param } };
+            return http.RouteParam{ .name = param_name, .value = http.RouteParamValue{ .str = actual_param } };
         },
         .int => {
-            const int_actual_part = try std.fmt.parseInt(i32, actual_param, 10);
-            return RouteParam{ .name = param_name, .value = RouteParamValue{ .int = int_actual_part } };
+            const int_actual_part = std.fmt.parseInt(i32, actual_param, 10) catch |err| {
+                log.debug("Error converting {s} into an integer, failing route match. Err: {any}", .{ actual_param, err });
+                return null;
+            };
+            return http.RouteParam{ .name = param_name, .value = http.RouteParamValue{ .int = int_actual_part } };
         },
     }
 }
@@ -300,6 +297,16 @@ test "match_get_general" {
         },
         Route{
             .method = .GET,
+            .path = "blogs/{id:int}",
+            .handler = testHandlerSuccessful,
+        },
+        Route{
+            .method = .GET,
+            .path = "blogs/name/{name:str}",
+            .handler = testHandlerSuccessful,
+        },
+        Route{
+            .method = .GET,
             .path = "blogs/{id:int}/details",
             .handler = testHandlerSuccessful,
         },
@@ -312,6 +319,11 @@ test "match_get_general" {
             .path = "blogs/23/details?filter=yes",
             .method = .GET,
             .expected = "blogs/{id:int}/details",
+        },
+        .{
+            .path = "blogs/something/name",
+            .method = .GET,
+            .expected = null,
         },
         .{
             .path = "blogs/23/details?aslkdjaslfkjasfdlkjha",
@@ -341,7 +353,7 @@ test "match_get_general" {
         .{
             .path = "blogs/12",
             .method = .GET,
-            .expected = null,
+            .expected = "blogs/{id:int}",
         },
         .{
             .path = "blogssss",
@@ -392,6 +404,65 @@ test "match_get_general" {
             .path = "blogs/23/details?query=what?happened",
             .method = .GET,
             .expected = "blogs/{id:int}/details",
+        },
+    };
+
+    for (test_cases) |test_case| {
+        var matched_route = try router.match(test_case.method, test_case.path);
+        if (matched_route == null) {
+            try std.testing.expect(test_case.expected == null);
+            continue;
+        }
+        std.testing.expect(test_case.expected != null) catch |err| {
+            std.debug.print("test_case.path: {s}\nmatched_route.path: {s}\n", .{ test_case.path, matched_route.?.route.path });
+            return err;
+        };
+        defer matched_route.?.deinit();
+        try std.testing.expectEqualStrings(test_case.expected.?, matched_route.?.route.path);
+    }
+}
+
+test "match_multiple_route" {
+    const allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var routes = [_]Route{
+        Route{
+            .method = .GET,
+            .path = "blogs",
+            .handler = testHandlerSuccessful,
+        },
+        Route{
+            .method = .GET,
+            .path = "blogs/{name:str}",
+            .handler = testHandlerSuccessful,
+        },
+        Route{
+            .method = .GET,
+            .path = "blogs/{name:str}/details",
+            .handler = testHandlerSuccessful,
+        },
+    };
+
+    var router = Router.init(arena_allocator, &routes);
+
+    const test_cases = [_]TestCase{
+        .{
+            .path = "blogs/something/details",
+            .method = .GET,
+            .expected = "blogs/{name:str}/details",
+        },
+        .{
+            .path = "blogs/something",
+            .method = .GET,
+            .expected = "blogs/{name:str}",
+        },
+        .{
+            .path = "blogs",
+            .method = .GET,
+            .expected = "blogs",
         },
     };
 

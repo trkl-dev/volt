@@ -40,9 +40,16 @@ def home(request: HttpRequest) -> HttpResponse:
     )
 
 
-@route("/blog")
+@route("/blog/{id:int}")
 def blog(request: HttpRequest) -> HttpResponse:
-    return HttpResponse("this is the blog pages% aslkdjasldkjasdkjhasdflkajsdhfalskshdahsdkjhakdfjhasdlfkjhasdfl\n%jh")
+    print(request.route_params)
+    return HttpResponse(f"this is the blog page by id\n{request.route_params}\n{request.query_params}")
+
+
+@route("/blog/name/{name:str}")
+def blog_name(request: HttpRequest) -> HttpResponse:
+    print(request.route_params)
+    return HttpResponse("this is the blog by name")
 
 
 if __name__ == "__main__":

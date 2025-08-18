@@ -180,8 +180,14 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
             },
         };
         handleRequest(allocator, routes, &request) catch |err| {
-            log.err("Error handling request in handleConnection(): {any}", .{err});
-            return;
+            log.err("Error handling request in handleConnection(): {any}, trace: {any}", .{ err, @errorReturnTrace() });
+            // Using the state of .received_head to check whether the request has already been responded to
+            if (request.server.state != .received_head) {
+                return;
+            }
+            request.respond("", .{ .status = std.http.Status.internal_server_error }) catch |res_err| {
+                log.err("Error trying to respond to request with internal_server_error. Server state: {any}, err: {any}", .{ request.server.state, res_err });
+            };
         };
     }
 }
@@ -320,7 +326,7 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
         .headers = headers.ptr,
         .num_headers = num_headers,
         .query_params = &matched_route.?.query_params,
-        // .route_params = matched_route.?.route_params,
+        .route_params = &matched_route.?.route_params,
     };
 
     const handler = matched_route.?.route.handler;

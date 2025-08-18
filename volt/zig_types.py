@@ -25,9 +25,30 @@ class HttpRequest(ctypes.Structure):
         ("headers", ctypes.POINTER(Header)),
         ("num_headers", ctypes.c_size_t),
         ("query_params", ctypes.c_void_p),
-        # ("route_params", ctypes.c_size_t),
+        ("route_params", ctypes.c_void_p),
     ]
 
+
+lib.route_params_get_keys.argtypes = [
+    ctypes.POINTER(HttpRequest),
+    ctypes.POINTER(ctypes.c_char_p),
+    ctypes.POINTER(ctypes.c_size_t),
+    ctypes.c_size_t,
+]
+
+lib.route_params_get_keys.restype = ctypes.c_size_t
+
+lib.route_params_size.argtypes = [ctypes.POINTER(HttpRequest)]
+lib.route_params_size.restype = ctypes.c_size_t
+
+class RouteParamValue(ctypes.Union):
+    _fields_ = [
+        ("int", ctypes.c_int32),
+        ("str", ctypes.c_char_p),
+    ]
+
+lib.route_params_get_value.argtypes = [ctypes.POINTER(HttpRequest), ctypes.c_char_p, ctypes.POINTER(RouteParamValue), ctypes.POINTER(ctypes.c_int)]
+lib.route_params_get_value.restype = ctypes.c_size_t
 
 lib.query_params_get_keys.argtypes = [
     ctypes.POINTER(HttpRequest),
