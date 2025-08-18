@@ -1,356 +1,96 @@
-const std = @import("std");
 const http = @import("http.zig");
-const middleware = @import("middleware.zig");
-
-const expect = std.testing.expect;
+const std = @import("std");
 
 const log = std.log.scoped(.zig);
-const test_log = std.log.scoped(.zig_test);
 
-var num_active_threads: u8 = 0;
-
-pub export fn run_server(server_addr: [*:0]const u8, server_port: u16, routes_to_register: [*]http.Route, num_routes: u16) void {
-    log.debug("run_server called", .{});
-    var gpa = std.heap.DebugAllocator(.{}).init;
-    const allocator = gpa.allocator();
-
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-
-    const arena_allocator = arena.allocator();
-
-    const routes = registerRoutes(arena_allocator, routes_to_register, num_routes) catch |err| {
-        log.err("error registering routes: {any}", .{err});
-        @panic("_run_server");
-    };
-    defer arena_allocator.free(routes);
-
-    runServer(allocator, server_addr, server_port, routes, 0) catch |err| {
-        log.err("error running server: {any}", .{err});
-        @panic("_run_server");
-    };
-}
-
-/// stop_iter will stop the server after stop_iter iterations, unless stop_iter is 0. This is for testing,
-/// so as to prevent blocking
-fn runServer(
-    allocator: std.mem.Allocator,
-    server_addr: [*:0]const u8,
-    server_port: u16,
+pub const Router = struct {
     routes: []Route,
-    stop_iter: u16,
-) !void {
-    std.debug.assert(routes.len > 0);
+    arena_allocator: std.mem.Allocator,
 
-    const server_addr_slice = std.mem.span(server_addr);
-    const addr = try std.net.Address.resolveIp(server_addr_slice, server_port);
+    pub fn init(arena_allocator: std.mem.Allocator, routes: []Route) Router {
+        return Router{
+            .arena_allocator = arena_allocator,
+            .routes = routes,
+        };
+    }
 
-    // reuse_address = true -> prevents TIME_WAIT on the socket
-    // which would otherwise result in `AddressInUse` error on restart for ~30s
-    // force_nonblocking = true -> server.accept() below is no longer a blocking call and
-    // will return errors when there are no connections and would otherwise block
-    var server = try addr.listen(std.net.Address.ListenOptions{
-        // Non-default fields
-        .reuse_address = true,
-        .force_nonblocking = true,
-
-        // Default fields
-        .kernel_backlog = 128,
-        .reuse_port = false,
-    });
-    defer server.deinit();
-
-    log.info("Running server on {any}", .{server.listen_address});
-
-    var num_iters: u16 = 0;
-    // Continue checking for new connections. New connections are given a separate thread to be handled in.
-    // This thread will continue waiting for requests on the same connection until the connection is closed.
-    while (!should_exit) {
-        if (stop_iter > 0 and num_iters >= stop_iter) {
-            break;
-        }
-        if (stop_iter > 0) {
-            num_iters += 1;
-        }
-        const connection = server.accept() catch |err| {
-            if (err == error.WouldBlock) {
-                std.time.sleep(10 * std.time.ns_per_ms);
-                continue;
-            } else {
-                log.err("Connection error: {}", .{err});
+    pub fn match(self: *Router, method: std.http.Method, path: []const u8) !?MatchedRoute {
+        for (self.routes) |route| {
+            if (method != route.method) {
                 continue;
             }
-        };
 
-        log.debug("Handling new connection", .{});
+            const params = self.matchPath(route.path, path) catch |err| {
+                log.err("Error matching route: {s}", .{route});
+                return err;
+            } orelse continue;
 
-        // Give each new connection a new thread.
-        // TODO: This should probably be a threadpool
-        const thread_result = std.Thread.spawn(
-            .{},
-            handleConnection,
-            .{ allocator, connection, routes },
-        );
-        log.debug("Thread spawned", .{});
-        if (thread_result) |thread| {
-            thread.detach();
-        } else |err| {
-            log.err("Failed to spawn thread: {any}", .{err});
-            continue;
+            return MatchedRoute{
+                .route = route,
+                .allocator = self.arena_allocator,
+                .query_params = params.query_params,
+                .route_params = params.route_params,
+            };
         }
+        return null;
     }
 
-    log.info("Shutting down...", .{});
-}
+    fn matchPath(self: *Router, template: []const u8, actual: []const u8) !?Params {
+        log.debug("matching path", .{});
+        var route_params = std.StringHashMap(http.RouteParamValue).init(self.arena_allocator);
+        errdefer route_params.deinit();
 
-test runServer {
-    const allocator = std.testing.allocator;
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
+        var template_parts = std.mem.splitScalar(u8, template, '/');
+        var actual_query_parts = std.mem.splitScalar(u8, actual, '?');
+        var actual_parts = std.mem.splitScalar(u8, actual_query_parts.first(), '/');
 
-    const arena_allocator = arena.allocator();
+        // Route parameter processing
+        while (actual_parts.next()) |actual_part| {
+            const template_part = template_parts.next() orelse {
+                // Hit the end of the actual parts before the end of template parts
+                route_params.deinit();
+                return null;
+            };
 
-    const r = [_]http.Route{
-        .{
-            .name = "/blog",
-            .handler = testHandlerSuccessful,
-        },
-        .{
-            .name = "/home",
-            .handler = testHandlerForbidden,
-        },
-    };
-    const routes_to_register: [*]const http.Route = &r;
+            // Handle route params: /{username:str} or /{id:int}, etc
+            if (template_part.len >= 3 and template_part[0] == '{' and template_part[template_part.len - 1] == '}') {
+                const route_param = parse_route_params(template_part, actual_part) orelse {
+                    route_params.deinit();
+                    return null;
+                };
+                try route_params.put(route_param.name, route_param.value);
+            } else {
+                if (!std.mem.eql(u8, actual_part, template_part)) {
+                    route_params.deinit();
+                    return null;
+                }
+            }
+        }
 
-    const routes = try registerRoutes(arena_allocator, routes_to_register, 2);
-    defer arena_allocator.free(routes);
+        // Query parameter processing
+        const query_params_str = actual_query_parts.next();
+        var query_params = try parse_query_params(self.arena_allocator, query_params_str);
+        var qp_iterator = query_params.iterator();
+        while (qp_iterator.next()) |entry| {
+            log.debug("qp: {s}", .{entry.key_ptr.*});
+        }
 
-    const thread = try std.Thread.spawn(
-        std.Thread.SpawnConfig{
-            .stack_size = std.Thread.SpawnConfig.default_stack_size,
-            .allocator = null,
-        },
-        runServer,
-        .{ allocator, "127.0.0.1", 1234, routes, 0 },
-    );
-    _ = thread;
+        // If there are still remaining template segments, then we have not matched on an entire path,
+        // so we return null
+        if (actual_parts.next() != null) {
+            route_params.deinit();
+            query_params.deinit();
+            return null;
+        }
 
-    var client = std.http.Client{ .allocator = allocator };
-    defer client.deinit();
-
-    var header_buffer: [16 * 1024]u8 = undefined;
-    const homeResponse = try client.fetch(.{ .location = .{ .url = "http://127.0.0.1:1234/home" }, .keep_alive = true, .server_header_buffer = &header_buffer });
-    try std.testing.expectEqual(std.http.Status.forbidden, homeResponse.status);
-
-    const blogResponse = try client.fetch(.{ .location = .{ .url = "http://127.0.0.1:1234/blog" }, .keep_alive = true, .server_header_buffer = &header_buffer });
-    try std.testing.expectEqual(std.http.Status.ok, blogResponse.status);
-
-    shutdown_server();
-}
-
-fn testHandlerSuccessful(request: *http.Request, response: *http.Response) callconv(.C) void {
-    test_log.debug("handler: {}, {}", .{ request, response });
-    test_log.debug("header name: {s}", .{request.headers[1].name});
-
-    response.status = 200;
-    response.body = "hi there";
-}
-
-fn testHandlerForbidden(request: *http.Request, response: *http.Response) callconv(.C) void {
-    test_log.debug("handler: {}, {}", .{ request, response });
-    test_log.debug("header name: {s}", .{request.headers[1].name});
-
-    response.status = 403;
-}
-
-fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Connection, routes: []Route) void {
-    num_active_threads += 1;
-    defer num_active_threads -= 1;
-
-    var read_buffer: [1024]u8 = undefined;
-    var http_server = std.http.Server.init(connection, &read_buffer);
-
-    // Continue trying to receive requests on the same connection
-    while (true) {
-        var request = http_server.receiveHead() catch |err| switch (err) {
-            error.HttpConnectionClosing => return,
-            // error.HttpHeadersOversize => handleResponseWith431(),
-            else => {
-                log.err("Request error in handle connection: {any}", .{err});
-                return;
-            },
-        };
-        handleRequest(allocator, routes, &request) catch |err| {
-            log.err("Error handling request in handleConnection(): {any}", .{err});
-            return;
+        return Params{
+            .route_params = route_params,
+            .query_params = query_params,
         };
     }
-}
-
-/// Requires an arena allocator so route paths and routes themselves can be freed together.
-/// Caller owns the memory
-fn registerRoutes(arena: std.mem.Allocator, routes_to_register: [*]const http.Route, num_routes: u16) ![]Route {
-    const routes = try arena.alloc(Route, num_routes);
-
-    var i: usize = 0;
-    while (i < num_routes) : (i += 1) {
-        routes[i].path = try arena.dupeZ(u8, std.mem.span(routes_to_register[i].name));
-        routes[i].handler = routes_to_register[i].handler;
-
-        log.debug("zig: Route registered: {s} -> {any}", .{ routes[i].path, routes[i].handler });
-    }
-
-    return routes;
-}
-
-test registerRoutes {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-
-    const arena_allocator = arena.allocator();
-
-    const r = [_]http.Route{
-        .{
-            .name = "/blog",
-            .handler = testHandlerSuccessful,
-        },
-        .{
-            .name = "/home",
-            .handler = testHandlerSuccessful,
-        },
-    };
-    const routes_to_register: [*]const http.Route = &r;
-
-    const routes = try registerRoutes(arena_allocator, routes_to_register, 2);
-    defer arena_allocator.free(routes);
-
-    try std.testing.expectEqual(2, routes.len);
-    try std.testing.expectEqualSlices(u8, "/blog", routes[0].path);
-    try std.testing.expectEqualSlices(u8, "/home", routes[1].path);
-}
-
-fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.http.Server.Request) !void {
-    log.debug("Handling request for {s}", .{request.head.target});
-
-    var res = http.Response{ .body = "", .content_length = 0, .content_type = null, .status = 0, .headers = &.{}, .num_headers = 0 };
-
-    const logging_middleware = middleware.Logging.init();
-
-    // CORS middleware will respond to request if allowed is false
-    if (!try middleware.CORS.allowed(request)) {
-        return;
-    }
-
-    var route: ?Route = null;
-    for (routes) |r| {
-        if (!std.mem.eql(u8, r.path, request.head.target)) {
-            continue;
-        }
-        route = r;
-    }
-
-    if (route == null) {
-        log.warn("##### Not found #####", .{});
-        try request.respond("404 Not Found", .{ .status = std.http.Status.not_found });
-        return;
-    }
-
-    log.debug("matched route: {s}", .{route.?.path});
-    var read_body: bool = true;
-    const request_reader: ?std.io.AnyReader = request.reader() catch |err| {
-        log.err("error requesting reader: {any}", .{err});
-        read_body = false;
-        return;
-    };
-
-    const content_length = request.head.content_length orelse 0;
-    var request_body: []u8 = undefined;
-    if (read_body) {
-        request_body = try request_reader.?.readAllAlloc(allocator, content_length);
-    }
-
-    // Get the number of headers
-    var header_iterator_counter = request.iterateHeaders();
-    var num_headers: usize = 0;
-    while (header_iterator_counter.next()) |header| {
-        log.debug("request header: name: {s}, value: {s}", .{ header.name, header.value });
-        num_headers += 1;
-    }
-
-    const headers = try allocator.alloc(http.Header, num_headers);
-    defer allocator.free(headers);
-
-    var header_iterator = request.iterateHeaders();
-    var index: usize = 0;
-    while (header_iterator.next()) |header| {
-        const header_name = try allocator.dupeZ(u8, header.name);
-        const header_value = try allocator.dupeZ(u8, header.value);
-        headers[index] = http.Header{ .name = header_name, .value = header_value };
-        index += 1;
-    }
-
-    defer {
-        for (headers) |header| {
-            // .free wants a slice, so we convert the null terminated strings to slices for freeing
-            allocator.free(std.mem.span(header.name));
-            allocator.free(std.mem.span(header.value));
-        }
-    }
-
-    const path_nt = try allocator.dupeZ(u8, request.head.target);
-    defer allocator.free(path_nt);
-
-    const method = std.enums.tagName(std.http.Method, request.head.method);
-    if (method == null) {
-        // Unfortunately the original method string is lost, unless we re-parse the original request
-        log.warn("bad method", .{});
-        try request.respond("", .{ .status = std.http.Status.method_not_allowed });
-        return;
-    }
-
-    const method_nt = try allocator.dupeZ(u8, method.?);
-    defer allocator.free(method_nt);
-
-    var req = http.Request{
-        .path = path_nt,
-        .method = method_nt,
-        .body = request_body.ptr,
-        .content_length = content_length,
-        .headers = headers.ptr,
-        .num_headers = num_headers,
-    };
-
-    const handler = route.?.handler;
-
-    handler(&req, &res);
-
-    log.debug("route handling complete", .{});
-
-    const status: std.http.Status = @enumFromInt(res.status);
-    const response_body: []const u8 = std.mem.span(res.body);
-    log.debug("response body: {s}", .{response_body});
-
-    const header_list = try allocator.alloc(std.http.Header, res.num_headers);
-    defer allocator.free(header_list);
-
-    for (header_list, 0..) |*header, ii| {
-        const c_header = res.headers[ii];
-        header.name = std.mem.span(c_header.name);
-        header.value = std.mem.span(c_header.value);
-    }
-
-    for (header_list) |header| {
-        log.debug("response header name: {s}, value: {s}", .{ header.name, header.value });
-    }
-
-    try request.respond(response_body, std.http.Server.Request.RespondOptions{
-        .status = status,
-        .extra_headers = header_list,
-    });
-    logging_middleware.post(request.head.target, status, request.head.method);
-}
-
-const Route = struct {
+};
+pub const Route = struct {
+    method: std.http.Method,
     path: []const u8,
     handler: http.HandlerFn,
 
@@ -369,20 +109,399 @@ const Route = struct {
     }
 };
 
-var should_exit = false;
+pub const Params = struct {
+    route_params: std.StringHashMap(http.RouteParamValue),
+    query_params: std.StringHashMap([]const u8),
+};
 
-export fn shutdown_server() void {
-    std.debug.assert(!should_exit);
-    should_exit = true;
+pub const MatchedRoute = struct {
+    allocator: std.mem.Allocator,
+    route: Route,
+    route_params: std.StringHashMap(http.RouteParamValue),
+    query_params: std.StringHashMap([]const u8),
+
+    pub fn deinit(self: *MatchedRoute) void {
+        self.route_params.deinit();
+        self.query_params.deinit();
+    }
+
+    pub fn format(
+        self: MatchedRoute,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = fmt;
+        _ = options;
+
+        try writer.print("{s}\n - route_params: \n", .{self.route.path});
+        var route_params_iter = self.route_params.iterator();
+        while (route_params_iter.next()) |route_param| {
+            switch (route_param.value_ptr.*) {
+                .int => try writer.print("\t - {s}={d}\n", .{ route_param.key_ptr.*, route_param.value_ptr.int }),
+                .str => try writer.print("\t - {s}={s}\n", .{ route_param.key_ptr.*, route_param.value_ptr.str }),
+            }
+        }
+
+        try writer.print(" - query_params: \n", .{});
+        var query_params_iter = self.query_params.iterator();
+        while (query_params_iter.next()) |query_param| {
+            try writer.print("\t - {s}={s}\n", .{ query_param.key_ptr.*, query_param.value_ptr.* });
+        }
+    }
+};
+
+/// Parse a given route parameter as per a given template string of the form:
+/// {param_name:param_type} where param_type can be either int or str
+fn parse_route_params(template_param: []const u8, actual_param: []const u8) ?http.RouteParam {
+    std.debug.assert(template_param[0] == '{');
+    std.debug.assert(template_param[template_param.len - 1] == '}');
+
+    // Strip surrounding "{" and "}"
+    const param_def = template_param[1 .. template_param.len - 1];
+
+    var param_parts = std.mem.splitScalar(u8, param_def, ':');
+    const param_name = param_parts.first();
+
+    const param_type_str = param_parts.next() orelse return null;
+    log.debug("param type str: {s}", .{param_type_str});
+    const param_type = std.meta.stringToEnum(http.ParamType, param_type_str) orelse return null;
+    log.debug("param type: {any}", .{param_type});
+    switch (param_type) {
+        .str => {
+            return http.RouteParam{ .name = param_name, .value = http.RouteParamValue{ .str = actual_param } };
+        },
+        .int => {
+            const int_actual_part = std.fmt.parseInt(i32, actual_param, 10) catch |err| {
+                log.debug("Error converting {s} into an integer, failing route match. Err: {any}", .{ actual_param, err });
+                return null;
+            };
+            return http.RouteParam{ .name = param_name, .value = http.RouteParamValue{ .int = int_actual_part } };
+        },
+    }
 }
 
-test shutdown_server {
-    // Ensure should_exit is set back to false after testing
-    should_exit = false;
-    defer should_exit = false;
+///Parse a raw query parameter string, and return a hashmap of extracted keys and values
+fn parse_query_params(allocator: std.mem.Allocator, query_params_raw: ?[]const u8) !std.StringHashMap([]const u8) {
+    var query_params = std.StringHashMap([]const u8).init(allocator);
+    errdefer query_params.deinit();
 
-    // Ensure shutdown_server sets should_exit from false -> true
-    try std.testing.expect(!should_exit);
-    shutdown_server();
-    try std.testing.expect(should_exit);
+    // We accept a null value to simplify things and ensure there is always a query params hash map, even
+    // if there are no query params
+    if (query_params_raw == null) {
+        return query_params;
+    }
+
+    // Only this first "?" in query params are valid. All others are considered data.
+    // Hence, we call `.next()` once, only.
+    var query_parts = std.mem.splitScalar(u8, query_params_raw.?, '&');
+    while (query_parts.next()) |query_part| {
+        var single_param_parts = std.mem.splitScalar(u8, query_part, '=');
+        // Allegedly example.com/path?=value1 is valid. Note the lack of a param name. For now, that case is not.
+        const param_name = single_param_parts.first();
+        const param_value = single_param_parts.next() orelse continue;
+
+        // Multiple params of the same name are valid, and we collapse them into a comma separated list.
+        if (query_params.get(param_name)) |existing_value| {
+            const combined_value = try std.fmt.allocPrint(allocator, "{s},{s}", .{ existing_value, param_value });
+            try query_params.put(param_name, combined_value);
+            continue;
+        }
+
+        try query_params.put(param_name, param_value);
+    }
+
+    return query_params;
+}
+
+test parse_query_params {
+    const allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    // Basic params
+    var query_params_1 = try parse_query_params(arena_allocator, "param1=value1&param2=value2");
+
+    try std.testing.expectEqual(2, query_params_1.count());
+    try std.testing.expectEqualStrings(query_params_1.get("param1").?, "value1");
+    try std.testing.expectEqualStrings(query_params_1.get("param2").?, "value2");
+
+    // Duplicate params
+    var query_params_2 = try parse_query_params(arena_allocator, "param1=value1&param1=value2&param2=value3");
+
+    try std.testing.expectEqual(2, query_params_2.count());
+    try std.testing.expectEqualStrings(query_params_2.get("param1").?, "value1,value2");
+    try std.testing.expectEqualStrings(query_params_2.get("param2").?, "value3");
+
+    // URL encoded params
+    var query_params_3 = try parse_query_params(arena_allocator, "param1=value1%20value2&param2=value3%26value4");
+
+    try std.testing.expectEqual(2, query_params_3.count());
+    try std.testing.expectEqualStrings(query_params_3.get("param1").?, "value1%20value2");
+    try std.testing.expectEqualStrings(query_params_3.get("param2").?, "value3%26value4");
+
+    // Plus sign encoding for spaces
+    var query_params_4 = try parse_query_params(arena_allocator, "param1=value1+value2&param2=value3");
+
+    try std.testing.expectEqual(2, query_params_4.count());
+    try std.testing.expectEqualStrings(query_params_4.get("param1").?, "value1+value2");
+    try std.testing.expectEqualStrings(query_params_4.get("param2").?, "value3");
+
+    // Question mark in query
+    var query_params_5 = try parse_query_params(arena_allocator, "param1=value1?value2&param2=value3");
+
+    try std.testing.expectEqual(2, query_params_5.count());
+    try std.testing.expectEqualStrings(query_params_5.get("param1").?, "value1?value2");
+    try std.testing.expectEqualStrings(query_params_5.get("param2").?, "value3");
+}
+
+pub fn getRoute(routes: []Route, route: []const u8) ?Route {
+    for (routes) |r| {
+        if (!std.mem.eql(u8, r.path, route)) {
+            continue;
+        }
+        return r;
+    }
+    return null;
+}
+
+fn testHandlerSuccessful(request: *http.Request, response: *http.Response) callconv(.C) void {
+    _ = request;
+    response.status = 200;
+    response.body = "hi there";
+}
+
+const TestCase = struct {
+    path: []const u8,
+    method: std.http.Method,
+    expected: ?[]const u8,
+};
+
+test "match_get_general" {
+    const allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var routes = [_]Route{
+        Route{
+            .method = .GET,
+            .path = "home",
+            .handler = testHandlerSuccessful,
+        },
+        Route{
+            .method = .GET,
+            .path = "blogs",
+            .handler = testHandlerSuccessful,
+        },
+        Route{
+            .method = .GET,
+            .path = "blogs/{id:int}",
+            .handler = testHandlerSuccessful,
+        },
+        Route{
+            .method = .GET,
+            .path = "blogs/name/{name:str}",
+            .handler = testHandlerSuccessful,
+        },
+        Route{
+            .method = .GET,
+            .path = "blogs/{id:int}/details",
+            .handler = testHandlerSuccessful,
+        },
+    };
+
+    var router = Router.init(arena_allocator, &routes);
+
+    const test_cases = [_]TestCase{
+        .{
+            .path = "blogs/23/details?filter=yes",
+            .method = .GET,
+            .expected = "blogs/{id:int}/details",
+        },
+        .{
+            .path = "blogs/something/name",
+            .method = .GET,
+            .expected = null,
+        },
+        .{
+            .path = "blogs/23/details?aslkdjaslfkjasfdlkjha",
+            .method = .GET,
+            .expected = "blogs/{id:int}/details",
+        },
+        .{
+            .path = "blogs/23/details?param=",
+            .method = .GET,
+            .expected = "blogs/{id:int}/details",
+        },
+        .{
+            .path = "blogs/23/details?",
+            .method = .GET,
+            .expected = "blogs/{id:int}/details",
+        },
+        .{
+            .path = "blogs/23/details",
+            .method = .GET,
+            .expected = "blogs/{id:int}/details",
+        },
+        .{
+            .path = "blogs",
+            .method = .GET,
+            .expected = "blogs",
+        },
+        .{
+            .path = "blogs/12",
+            .method = .GET,
+            .expected = "blogs/{id:int}",
+        },
+        .{
+            .path = "blogssss",
+            .method = .GET,
+            .expected = null,
+        },
+        .{
+            .path = "somethingelse",
+            .method = .GET,
+            .expected = null,
+        },
+        .{
+            .path = "somethingelse/23/details",
+            .method = .GET,
+            .expected = null,
+        },
+        // Query param edge cases
+        // Multiple parameters
+        .{
+            .path = "blogs/23/details?filter=yes&sort=date&limit=10",
+            .method = .GET,
+            .expected = "blogs/{id:int}/details",
+        },
+
+        // Duplicate parameters
+        .{
+            .path = "blogs/23/details?tag=tech&tag=programming",
+            .method = .GET,
+            .expected = "blogs/{id:int}/details",
+        },
+
+        // URL encoded characters
+        .{
+            .path = "blogs/23/details?search=hello%20world&category=tech%26dev",
+            .method = .GET,
+            .expected = "blogs/{id:int}/details",
+        },
+
+        // Plus sign encoding for spaces
+        .{
+            .path = "blogs/23/details?search=hello+world",
+            .method = .GET,
+            .expected = "blogs/{id:int}/details",
+        },
+
+        // Question mark in query value
+        .{
+            .path = "blogs/23/details?query=what?happened",
+            .method = .GET,
+            .expected = "blogs/{id:int}/details",
+        },
+    };
+
+    for (test_cases) |test_case| {
+        var matched_route = try router.match(test_case.method, test_case.path);
+        if (matched_route == null) {
+            try std.testing.expect(test_case.expected == null);
+            continue;
+        }
+        std.testing.expect(test_case.expected != null) catch |err| {
+            std.debug.print("test_case.path: {s}\nmatched_route.path: {s}\n", .{ test_case.path, matched_route.?.route.path });
+            return err;
+        };
+        defer matched_route.?.deinit();
+        try std.testing.expectEqualStrings(test_case.expected.?, matched_route.?.route.path);
+    }
+}
+
+test "match_multiple_route" {
+    const allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var routes = [_]Route{
+        Route{
+            .method = .GET,
+            .path = "blogs",
+            .handler = testHandlerSuccessful,
+        },
+        Route{
+            .method = .GET,
+            .path = "blogs/{name:str}",
+            .handler = testHandlerSuccessful,
+        },
+        Route{
+            .method = .GET,
+            .path = "blogs/{name:str}/details",
+            .handler = testHandlerSuccessful,
+        },
+    };
+
+    var router = Router.init(arena_allocator, &routes);
+
+    const test_cases = [_]TestCase{
+        .{
+            .path = "blogs/something/details",
+            .method = .GET,
+            .expected = "blogs/{name:str}/details",
+        },
+        .{
+            .path = "blogs/something",
+            .method = .GET,
+            .expected = "blogs/{name:str}",
+        },
+        .{
+            .path = "blogs",
+            .method = .GET,
+            .expected = "blogs",
+        },
+    };
+
+    for (test_cases) |test_case| {
+        var matched_route = try router.match(test_case.method, test_case.path);
+        if (matched_route == null) {
+            try std.testing.expect(test_case.expected == null);
+            continue;
+        }
+        std.testing.expect(test_case.expected != null) catch |err| {
+            std.debug.print("test_case.path: {s}\nmatched_route.path: {s}\n", .{ test_case.path, matched_route.?.route.path });
+            return err;
+        };
+        defer matched_route.?.deinit();
+        try std.testing.expectEqualStrings(test_case.expected.?, matched_route.?.route.path);
+    }
+}
+
+// regression?
+// localhost:1234/home?hi=there&param2=value2&v=p
+test "match_get_qp" {
+    const allocator = std.testing.allocator;
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var routes = [_]Route{
+        Route{
+            .method = .GET,
+            .path = "home",
+            .handler = testHandlerSuccessful,
+        },
+    };
+
+    var router = Router.init(arena_allocator, &routes);
+
+    var matched_route = try router.match(.GET, "home?hi=there&param2=value2&v=p");
+    try std.testing.expect(matched_route != null);
+    defer matched_route.?.deinit();
+    try std.testing.expectEqual(3, matched_route.?.query_params.count());
+    // try std.testing.expectEqualStrings(test_case.expected.?, matched_route.?.route.path);
 }

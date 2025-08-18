@@ -1,11 +1,6 @@
-import os
 import time
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
 from volt.router import Handler, HttpRequest, HttpResponse, route, middleware, run_server
-from db import query
 
 
 @middleware
@@ -34,22 +29,10 @@ def auth(request: HttpRequest, handler: Handler) -> HttpResponse:
     return handler(request)
 
 
-@route("/home")
+@route("/home", method="GET")
 def home(request: HttpRequest) -> HttpResponse:
-    db_url = os.environ["DB_URL"].replace("postgres", "postgresql+psycopg")
-    engine = create_engine(db_url, echo=True)
-
-    with Session(engine) as session:
-        querier = query.Querier(session.connection())
-        volt = querier.get_volt(id=1)
-
-    if volt is None:
-        print("Volt is None")
-    else:
-        print(volt)
-
     return HttpResponse(
-        f"this is the homepage. Volt DB response: {volt.stuff if volt is not None else 'None'}",
+        f"this is the homepage. query_params: {request.query_params}",
         headers=[{
             "name": "Something",
             "value": "Elsee",
@@ -57,9 +40,16 @@ def home(request: HttpRequest) -> HttpResponse:
     )
 
 
-@route("/blog")
+@route("/blog/{id:int}")
 def blog(request: HttpRequest) -> HttpResponse:
-    return HttpResponse("this is the blog pages% aslkdjasldkjasdkjhasdflkajsdhfalskshdahsdkjhakdfjhasdlfkjhasdfl\n%jh")
+    print(request.route_params)
+    return HttpResponse(f"this is the blog page by id\n{request.route_params}\n{request.query_params}")
+
+
+@route("/blog/name/{name:str}")
+def blog_name(request: HttpRequest) -> HttpResponse:
+    print(request.route_params)
+    return HttpResponse("this is the blog by name")
 
 
 if __name__ == "__main__":
