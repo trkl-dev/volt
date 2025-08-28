@@ -146,7 +146,7 @@ def route(path: str, method: str = "GET"):
                             raise Exception("String type route param with invalid size 0")
                         str_bytes = ctypes.string_at(value_out.str, size)
                         route_params[key] = str_bytes.decode('utf-8')
-                    print(f"rp key: {key}, value: {route_params[key]}")
+                    print(f"py: route param key: {key}, value: {route_params[key]}")
 
             request_headers = []
             for i in range(req.num_headers):
@@ -222,6 +222,7 @@ def _run_server(server_addr, server_port):
             routes_array[i].method = r["method"]
             routes_array[i].handler = r["handler"]
         
+        print("py: calling zig run_server")
         zt.lib.run_server(server_addr.encode('utf-8'), server_port, routes_array, len(routes))
 
     return run
