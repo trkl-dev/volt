@@ -574,7 +574,12 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
     var buffer: [8000]u8 = undefined;
     const request_reader = request.readerExpectNone(&buffer);
 
-    const request_body = try request_reader.readAlloc(arena_allocator, content_length);
+    var request_body: []u8 = undefined;
+    if (content_length > 0) {
+        request_body = try request_reader.readAlloc(arena_allocator, content_length);
+    } else {
+        request_body = &[_]u8{};
+    }
     var res = http.Response{
         .body = "",
         .content_length = 0,
