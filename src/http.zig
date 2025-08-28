@@ -121,4 +121,4 @@ pub const Route = extern struct {
     handler: HandlerFn,
 };
 
-pub const HandlerFn = *const fn (*Request, *Response) callconv(.C) void;
+pub const HandlerFn = *const fn (*Request, *Response) callconv(.c) void;

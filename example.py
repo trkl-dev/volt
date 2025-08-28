@@ -15,18 +15,38 @@ def logging(request: HttpRequest, handler: Handler) -> HttpResponse:
 @middleware
 def auth(request: HttpRequest, handler: Handler) -> HttpResponse:
     print("running auth")
-    auth = False
-    for header in request.headers:
-        if header["name"] == "Auth":
-            auth = True
-
-    if not auth:
-        resp = HttpResponse(status=403)
-        print(resp.status)
-        return resp
-
     print("auth passed")
     return handler(request)
+    # auth = False
+    # for header in request.headers:
+    #     if header["name"] == "Auth":
+    #         auth = True
+    #
+    # if not auth:
+    #     resp = HttpResponse(status=403)
+    #     print(resp.status)
+    #     return resp
+    #
+    # print("auth passed")
+    # return handler(request)
+
+
+@route("/magpie", method="GET")
+def magpie(request: HttpRequest) -> HttpResponse:
+    return HttpResponse(
+        """
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+		<title id="title">MyTripTracker</title>
+    </head>
+    <body id="main">
+        <p>Hi there</p>
+        <img src="static/magpie.jpg", alt="image of a magpie">
+    </body>
+</html>
+        """
+    )
 
 
 @route("/home", method="GET")
@@ -48,9 +68,13 @@ def blog(request: HttpRequest) -> HttpResponse:
 
 @route("/blog/name/{name:str}")
 def blog_name(request: HttpRequest) -> HttpResponse:
+    print("inside /blog/name/{name:str} route")
     print(request.route_params)
     return HttpResponse("this is the blog by name")
 
+@route("/content", method="POST")
+def content(request: HttpRequest) -> HttpResponse:
+    return HttpResponse(f"this is the content page. Content: {request.body=}")
 
 if __name__ == "__main__":
     run_server()

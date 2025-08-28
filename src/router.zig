@@ -21,7 +21,7 @@ pub const Router = struct {
             }
 
             const params = self.matchPath(route.path, path) catch |err| {
-                log.err("Error matching route: {s}", .{route});
+                log.err("Error matching route: {f}", .{route});
                 return err;
             } orelse continue;
 
@@ -36,7 +36,7 @@ pub const Router = struct {
     }
 
     fn matchPath(self: *Router, template: []const u8, actual: []const u8) !?Params {
-        log.debug("matching path", .{});
+        log.debug("matching path: {s} against {s}", .{ actual, template });
         var route_params = std.StringHashMap(http.RouteParamValue).init(self.arena_allocator);
         errdefer route_params.deinit();
 
@@ -96,13 +96,8 @@ pub const Route = struct {
 
     pub fn format(
         self: Route,
-        comptime fmt: []const u8,
-        options: std.fmt.FormatOptions,
         writer: anytype,
     ) !void {
-        _ = fmt;
-        _ = options;
-
         try writer.print("{s} ({})", .{
             self.path, self.handler,
         });
@@ -266,7 +261,7 @@ pub fn getRoute(routes: []Route, route: []const u8) ?Route {
     return null;
 }
 
-fn testHandlerSuccessful(request: *http.Request, response: *http.Response) callconv(.C) void {
+fn testHandlerSuccessful(request: *http.Request, response: *http.Response) callconv(.c) void {
     _ = request;
     response.status = 200;
     response.body = "hi there";

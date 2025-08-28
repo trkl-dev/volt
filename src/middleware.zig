@@ -12,10 +12,10 @@ pub const Logging = struct {
         };
     }
 
-    pub fn post(self: Logging, path: []const u8, status: std.http.Status, method: std.http.Method) void {
+    pub fn after(self: Logging, path: []const u8, status: std.http.Status, method: std.http.Method) void {
         const elapsed_time: i64 = std.time.milliTimestamp() - self.start_time;
 
-        logging_middleware_log.info("request: path={s}, method={s}, status={d} ({s}), duration={d}ms\n", .{
+        logging_middleware_log.info("request: path={s}, method={s}, status={d} ({s}), duration={d}ms", .{
             path,
             @tagName(method),
             status,
@@ -31,7 +31,7 @@ pub const CORS = struct {
         const valid_request = true;
         if (!valid_request) {
             try request.respond("CORS Failed\n", .{ .status = std.http.Status.forbidden });
-            std.debug.print("CORS pre-processing failed: path={s}\n", .{request.head.target});
+            std.debug.print("CORS pre-processing failed: path={s}", .{request.head.target});
         }
         return valid_request;
     }
