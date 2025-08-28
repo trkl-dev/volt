@@ -57,7 +57,7 @@ pub fn build(b: *std.Build) void {
         // Default
         .version = null,
         .max_rss = 0,
-        .use_llvm = null,
+        .use_llvm = true,
         .use_lld = null,
         .zig_lib_dir = null,
         .win32_manifest = null,
@@ -70,7 +70,7 @@ pub fn build(b: *std.Build) void {
         .linkage = .dynamic,
     });
 
-    dylib.linkLibC();
+    dylib.root_module.link_libc = true;
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
