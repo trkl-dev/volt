@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+@theme {
+    --color-volt-yellow: #fbbf24;
+    --color-volt-blue: #1e40af;
+    --color-volt-dark: #0f172a;
+}

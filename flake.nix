@@ -15,7 +15,8 @@
       system: let
         pkgs = import nixpkgs { system = system; config.allowUnfree = true; };
         nativeBuildInputs = with pkgs; [
-          zig
+          # zig Removed until 0.15.1 is in nixos branch
+          tailwindcss_4
           python3
           sqlc
           postgresql
@@ -29,6 +30,7 @@
           ps.psycopg2-binary
           ps.psycopg-pool
           ps.sqlalchemy
+          ps.jinja2
         ]);
       in {
         devShells.default = pkgs.mkShell {

@@ -1,4 +1,5 @@
 import time
+from jinja2 import Environment, FileSystemLoader
 
 from volt.router import Handler, HttpRequest, HttpResponse, route, middleware, run_server
 
@@ -17,36 +18,18 @@ def auth(request: HttpRequest, handler: Handler) -> HttpResponse:
     print("running auth")
     print("auth passed")
     return handler(request)
-    # auth = False
-    # for header in request.headers:
-    #     if header["name"] == "Auth":
-    #         auth = True
-    #
-    # if not auth:
-    #     resp = HttpResponse(status=403)
-    #     print(resp.status)
-    #     return resp
-    #
-    # print("auth passed")
-    # return handler(request)
 
 
 @route("/magpie", method="GET")
 def magpie(request: HttpRequest) -> HttpResponse:
-    return HttpResponse(
-        """
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-		<title id="title">MyTripTracker</title>
-    </head>
-    <body id="main">
-        <p>Hi there</p>
-        <img src="static/magpie.jpg", alt="image of a magpie">
-    </body>
-</html>
-        """
-    )
+    environment = Environment(loader=FileSystemLoader("templates/"))
+    template = environment.get_template("base.html")
+
+    content = template.render({
+        "message": "hi there yo",
+    })
+
+    return HttpResponse(content)
 
 
 @route("/home", method="GET")
