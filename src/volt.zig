@@ -264,13 +264,39 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
     // Continue trying to receive requests on the same connection
     while (true) {
         var request = http_server.receiveHead() catch |err| switch (err) {
-            error.HttpConnectionClosing => return,
-            // error.HttpHeadersOversize => handleResponseWith431(),
+            error.HttpConnectionClosing => {
+                log.debug("Connection closing.", .{});
+                return;
+            },
+            // ReadFailed is returned for numerous errors, with the actual error on conn_reader.file_reader.err
+            error.ReadFailed => {
+                switch (conn_reader.file_reader.err.?) {
+                    // error.WouldBlock is returned on MacOS, according to stdlib docs -> #std.posix.readv
+                    // since Non Blocking mode seems to be the default. This is returned and we continue to
+                    // receiveHead() on the connection while this is returned, or exit out if the connection is closed.
+                    // TODO: Look into Non Blocking mode and whether that should be enabled, and how this differs per OS.
+                    error.WouldBlock => {
+                        continue;
+                    },
+                    else => {
+                        log.err("Unexpected error when ReadFailed: {any}, {any}", .{ err, conn_reader.file_reader.err });
+                        if (@errorReturnTrace()) |trace| {
+                            std.debug.dumpStackTrace(trace.*);
+                        }
+                        // TODO: Look into whether this should be a return or a continue
+                        continue;
+                    },
+                }
+            },
             else => {
                 log.err("Request error in handle connection: {any}", .{err});
+                if (@errorReturnTrace()) |trace| {
+                    std.debug.dumpStackTrace(trace.*);
+                }
                 return;
             },
         };
+        log.debug("Request received on connection.", .{});
 
         // Capture the head, as the memory will become invalidated as part of handling the request
         const head = request.head;
