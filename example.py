@@ -1,8 +1,16 @@
 import time
 from jinja2 import Environment, FileSystemLoader
 
-from volt.router import Handler, HttpRequest, HttpResponse, route, middleware, run_server
+from volt.router import Handler, HttpRequest, HttpResponse, Redirect, route, middleware, run_server
 
+
+# TODO: Move this out of middleware, could probably even be in Zig
+@middleware
+def htmx(request: HttpRequest, handler: Handler) -> HttpResponse:
+    for header in request.headers:
+        if header:
+            request.is_hx_request = True
+    return handler(request)
 
 @middleware
 def logging(request: HttpRequest, handler: Handler) -> HttpResponse:
@@ -20,27 +28,65 @@ def auth(request: HttpRequest, handler: Handler) -> HttpResponse:
     return handler(request)
 
 
-@route("/magpie", method="GET")
-def magpie(request: HttpRequest) -> HttpResponse:
-    environment = Environment(loader=FileSystemLoader("templates/"))
-    template = environment.get_template("base.html")
+def get_base_context() -> dict:
+    return {
+        "extraitems": [
+            "item1",
+            "item2",
+            "item3",
+        ],
+    }
 
-    content = template.render({
-        "message": "hi there yo",
-    })
+
+@route("/", method="GET")
+def root(request: HttpRequest) -> HttpResponse:
+    environment = Environment(loader=FileSystemLoader("templates/"))
+    template = environment.get_template("home.html")
+
+    if request.is_hx_request:
+        # load just content without 'extends'
+        pass
+    else:
+        # load with extends
+        pass
+
+    # Loading just a node without extends (parents), makes sense
+    # something to consider is the need for additional context. Context 
+    # _might_ need to be associated at the template level?
+
+    context = {
+        "selected": "home",
+    }
+    
+    base_context = get_base_context()
+
+    content = template.render(context | base_context)
+
+    return HttpResponse(content)
+
+@route("/features", method="GET")
+def features(request: HttpRequest) -> HttpResponse:
+    environment = Environment(loader=FileSystemLoader("templates/"))
+    template = environment.get_template("features.html")
+
+    base_context = get_base_context()
+    
+    context = {
+        "selected": "features",
+    }
+
+    content = template.render(context | base_context)
 
     return HttpResponse(content)
 
 
 @route("/home", method="GET")
 def home(request: HttpRequest) -> HttpResponse:
-    return HttpResponse(
-        f"this is the homepage. query_params: {request.query_params}",
-        headers=[{
-            "name": "Something",
-            "value": "Elsee",
-        }]
-    )
+    # This should be able to handle HTMX requests, and only render what is necesary.
+    # Ideally, this might not actually require a redirect.
+    # Should just render what is at the desired route, and update the URL accordingly?
+    # return Redirect("/")
+    return Redirect("/")
 
 
 @route("/blog/{id:int}")

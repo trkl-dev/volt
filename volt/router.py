@@ -20,6 +20,7 @@ class HttpRequest:
     headers: list[Header]
     query_params: dict[str, str]
     route_params: dict[str, str|int]
+    is_hx_request: bool
 
     def __init__(self, method: str, path: str, body: str, body_len: int, headers: list[Header], query_params: dict[str, str], route_params: dict[str, str|int]) -> None:
         self.method = method
@@ -29,6 +30,7 @@ class HttpRequest:
         self.headers = headers
         self.query_params = query_params
         self.route_params = route_params
+        self.is_hx_request = False
 
 
 class HttpResponse:
@@ -247,3 +249,7 @@ def handle_sigint(signum, frame):
 
 
 signal.signal(signal.SIGINT, handle_sigint)
+
+class Redirect(HttpResponse):
+    def __init__(self, route: str) -> None:
+        pass
