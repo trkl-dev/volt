@@ -8,7 +8,17 @@ from typing import TYPE_CHECKING, Any
 # Better logging of panic errors
 faulthandler.enable()
 
-lib = ctypes.CDLL('zig-out/lib/libvolt.so')
+print(platform.system())
+
+lib = None
+if platform.system() == 'Darwin':
+    lib = ctypes.CDLL('zig-out/lib/libvolt.dylib')
+else:
+    lib = ctypes.CDLL('zig-out/lib/libvolt.so')
+
+if lib is None:
+    raise Exception("Failed to load libvolt")
+
 
 class Header(ctypes.Structure):
     _fields_ = [
@@ -86,16 +96,6 @@ class Route(ctypes.Structure):
         ("method", ctypes.c_char_p),
         ("handler", CALLBACK),
     ]
-
-
-lib = None
-if platform.system() == 'Darwin':
-    lib = ctypes.CDLL('zig-out/lib/libvolt.dylib')
-else:
-    lib = ctypes.CDLL('zig-out/lib/libvolt.so')
-
-if lib is None:
-    raise Exception("Failed to load libvolt")
 
 
 lib.run_server.argtypes = [ctypes.c_char_p, ctypes.c_uint16, ctypes.POINTER(Route), ctypes.c_uint16]
