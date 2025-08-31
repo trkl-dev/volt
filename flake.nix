@@ -15,7 +15,6 @@
       system: let
         pkgs = import nixpkgs { system = system; config.allowUnfree = true; };
         nativeBuildInputs = with pkgs; [
-          # zig Removed until 0.15.1 is in nixos branch
           tailwindcss_4
           python3
           sqlc
