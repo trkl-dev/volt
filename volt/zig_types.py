@@ -8,8 +8,6 @@ from typing import TYPE_CHECKING, Any
 # Better logging of panic errors
 faulthandler.enable()
 
-print(platform.system())
-
 lib = None
 if platform.system() == 'Darwin':
     lib = ctypes.CDLL('zig-out/lib/libvolt.dylib')
