@@ -2,7 +2,7 @@ import time
 
 from volt.router import Handler, HttpRequest, HttpResponse, Redirect, route, middleware, run_server
 
-from components import Block, Home, Features, NavSelected
+from components import Home, Features, NavSelected, NavBar
 
 
 # TODO: Move this out of middleware, could probably even be in Zig
@@ -30,9 +30,10 @@ def logging(request: HttpRequest, handler: Handler) -> HttpResponse:
 
 @middleware
 def auth(request: HttpRequest, handler: Handler) -> HttpResponse:
-    print("running auth")
-    print("auth passed")
-    return handler(request)
+    auth_success = True
+    if auth_success:
+        return handler(request)
+    return HttpResponse(body="get outta here!", status=403)
 
 
 @route("/", method="GET")
@@ -40,7 +41,7 @@ def root(request: HttpRequest) -> HttpResponse:
     context = Home.Context(
         request=request,
         selected=NavSelected.HOME,
-        oob=[Block("base.html", "navbar")],
+        oob=[NavBar(NavBar.Context(request=request, selected=NavSelected.HOME, oob=[]))],
     )
 
     return HttpResponse(Home(context).render(request))
@@ -51,7 +52,7 @@ def features(request: HttpRequest) -> HttpResponse:
     context = Features.Context(
         request=request,
         selected=NavSelected.FEATURES,
-        oob=[Block("base.html", "navbar")],
+        oob=[NavBar(NavBar.Context(request=request, selected=NavSelected.FEATURES, oob=[]))],
     )
     return HttpResponse(Features(context).render(request))
 

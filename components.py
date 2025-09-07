@@ -15,12 +15,25 @@ Block = namedtuple("Block", ["template_name", "block_name"])
 
 
 class Component:
+    """
+    The Component class is the container for information pertaining to a particular 'block' 
+    in a template. A component will associate a block within a template, with a set context 
+    class for that block, which should contain all of the fields required for that block to 
+    render.
+    """
     template_name: str
+    block_name = "content"
 
     @dataclass
     class Context:
+        """
+        The component assumes the block to be called 'content' if no alternative is provided, 
+        and will natively handle HTMX partial requests, by returning individual blocks. Out-Of-Band
+        swaps can be created adding Components to the 'oob' field in the Context, and setting
+        hx-select-oob="#id-of-oob-block" in the block template.
+        """
         request: HttpRequest
-        oob: List[Block]
+        oob: List['Component']
 
     context: Context
 
@@ -31,8 +44,8 @@ class Component:
         if request.hx_request:
             context = asdict(self.context)
             html = render_block(environment, self.template_name, request.hx_fragment, context)
-            for oob in self.context.oob:
-                html += render_block(environment, oob.template_name, oob.block_name, context)
+            for component in self.context.oob:
+                html += render_block(environment, component.template_name, component.block_name, asdict(component.context))
             return html
 
         context = asdict(self.context)
@@ -49,19 +62,36 @@ class NavSelected(StrEnum):
     QUICKSTART = "quickstart"
 
 
-# Linked to base.html
-@dataclass
-class BaseContext():
-    selected: NavSelected
+class NavBar(Component):
+    template_name = "base.html"
+    block_name = "navbar"
+
+    @dataclass
+    class Context(Component.Context):
+        selected: NavSelected
+
+    def __init__(self, context: Context) -> None:
+        super().__init__(context)
+
+
+
+class Base(Component):
+    template_name = "base.html"
+
+    @dataclass
+    class Context(Component.Context):
+        selected: NavSelected
+
+    def __init__(self, context: Context) -> None:
+        super().__init__(context)
 
 
 # vvv Tentatively thinking these component classes should be generated? vvv #
-
 class Home(Component):
     template_name = "home.html"
 
     @dataclass
-    class Context(BaseContext, Component.Context):
+    class Context(Base.Context):
         ...
 
     def __init__(self, context: Context) -> None:
@@ -72,7 +102,7 @@ class Features(Component):
     template_name = "features.html"
 
     @dataclass
-    class Context(BaseContext, Component.Context):
+    class Context(Base.Context):
         ...
 
     def __init__(self, context: Context) -> None:
