@@ -29,7 +29,6 @@
           ps.psycopg2-binary
           ps.psycopg-pool
           ps.sqlalchemy
-          ps.jinja2
         ]);
       in {
         devShells.default = pkgs.mkShell {
