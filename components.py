@@ -45,6 +45,8 @@ class Component:
 class NavSelected(StrEnum):
     HOME = "home"
     FEATURES = "features"
+    PERFORMANCE = "performance"
+    QUICKSTART = "quickstart"
 
 
 # Linked to base.html
