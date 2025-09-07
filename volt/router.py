@@ -5,10 +5,6 @@ import sys
 
 from collections.abc import Callable
 from typing import Any, Optional, TypedDict, List
-from dataclasses import asdict
-from typing import Protocol, runtime_checkable, ClassVar, Dict, Any
-from jinja2 import Environment, FileSystemLoader
-from jinja2_fragments import render_block
 
 from . import zig_types as zt
 
@@ -25,6 +21,7 @@ class HttpRequest:
     query_params: dict[str, str]
     route_params: dict[str, str|int]
     hx_request: bool
+    hx_fragment: str
 
     def __init__(self, method: str, path: str, body: str, body_len: int, headers: list[Header], query_params: dict[str, str], route_params: dict[str, str|int]) -> None:
         self.method = method
@@ -268,30 +265,3 @@ class Redirect(HttpResponse):
         super().__init__(status=303, headers=headers)
 
 
-@runtime_checkable
-class DataclassProtocol(Protocol):
-    __dataclass_fields__: ClassVar[Dict[str, Any]]
-
-environment = Environment(loader=FileSystemLoader("templates/"))
-
-
-# Tentatively thinking these component classes should be generated?
-class Component:
-    template_name: str
-
-    def __init__(self) -> None:
-        self.context: DataclassProtocol
-
-    def render(self, request: HttpRequest) -> str:
-        if request.hx_request:
-            return self.render_block(request.hx_fragment)
-
-        context = asdict(self.context)
-        template = environment.get_template(self.template_name)
-        return template.render(context)
-
-
-    def render_block(self, block: str) -> str:
-        context = asdict(self.context)
-        html = render_block(environment, self.template_name, block, context)
-        return html

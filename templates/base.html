@@ -19,7 +19,8 @@
 
 <body hx-ext="fragments" hx-push-url="true" hx-target="#content" -target="#content" class="bg-linear-135 from-linear-start via-linear-mid to-linear-end text-white min-h-screen">
     <!-- Navigation -->
-    <nav class="bg-black/20 backdrop-blur-sm border-b border-gray-700/50 sticky top-0 z-50">
+    {% block navbar %}
+    <nav id="navbar" hx-select-oob="#navbar" class="bg-black/20 backdrop-blur-sm border-b border-gray-700/50 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center py-4">
                 <a hx-get="/" class="flex cursor-pointer items-center space-x-3">
@@ -36,6 +37,7 @@
             </div>
         </div>
     </nav>
+    {% endblock %}
     <section id="content">
     {% block content %}
     {% endblock %}

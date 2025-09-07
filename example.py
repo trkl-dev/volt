@@ -2,7 +2,7 @@ import time
 
 from volt.router import Handler, HttpRequest, HttpResponse, Redirect, route, middleware, run_server
 
-from components import Home, Features, NavSelected
+from components import Block, Home, Features, NavSelected
 
 
 # TODO: Move this out of middleware, could probably even be in Zig
@@ -40,6 +40,7 @@ def root(request: HttpRequest) -> HttpResponse:
     context = Home.Context(
         request=request,
         selected=NavSelected.HOME,
+        oob=[Block("base.html", "navbar")],
     )
 
     return HttpResponse(Home(context).render(request))
@@ -50,6 +51,7 @@ def features(request: HttpRequest) -> HttpResponse:
     context = Features.Context(
         request=request,
         selected=NavSelected.FEATURES,
+        oob=[Block("base.html", "navbar")],
     )
     return HttpResponse(Features(context).render(request))
 
