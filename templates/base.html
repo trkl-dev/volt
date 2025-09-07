@@ -6,139 +6,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Volt ⚡ - Lightning-Fast Python Web Framework</title>
     <link rel="stylesheet" type="text/css" href="/static/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.6/dist/htmx.js" integrity="sha384-ksKjJrwjL5VxqAkAZAVOPXvMkwAykMaNYegdixAESVr+KqLkKE8XBDoZuwyWVUDv" crossorigin="anonymous"></script>
+    <script src="/static/htmx-ext-fragments.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
         body {
             font-family: 'Inter', sans-serif;
         }
-
-        .gradient-bg {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
-        }
-
-        .lightning-animation {
-            animation: lightning 2s ease-in-out infinite;
-        }
-
-        @keyframes lightning {
-
-            0%,
-            100% {
-                opacity: 1;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: 0.8;
-                transform: scale(1.05);
-            }
-        }
-
-        .code-block {
-            background: linear-gradient(135deg, #1e293b, #334155);
-            border: 1px solid #475569;
-        }
-
-        .performance-bar {
-            animation: fillBar 3s ease-in-out infinite;
-        }
-
-        @keyframes fillBar {
-            0% {
-                width: 0%;
-            }
-
-            100% {
-                width: 100%;
-            }
-        }
-
-        .float-animation {
-            animation: float 6s ease-in-out infinite;
-        }
-
-        @keyframes float {
-
-            0%,
-            100% {
-                transform: translateY(0px);
-            }
-
-            50% {
-                transform: translateY(-10px);
-            }
-        }
-
-        .typing-effect {
-            border-right: 2px solid #fbbf24;
-            animation: typing 3.5s steps(40, end), blink-caret 0.75s step-end infinite;
-            white-space: nowrap;
-            overflow: hidden;
-        }
-
-        @keyframes typing {
-            from {
-                width: 0
-            }
-
-            to {
-                width: 100%
-            }
-        }
-
-        @keyframes blink-caret {
-
-            from,
-            to {
-                border-color: transparent
-            }
-
-            50% {
-                border-color: #fbbf24;
-            }
-        }
-
-        .glow-effect {
-            box-shadow: 0 0 30px rgba(251, 191, 36, 0.3);
-        }
-
-        .card-hover {
-            transition: all 0.3s ease;
-        }
-
-        .card-hover:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        }
     </style>
 </head>
 
-<body class="gradient-bg text-white min-h-screen">
-
+<body hx-ext="fragments" hx-push-url="true" hx-target="#content" -target="#content" class="bg-linear-135 from-linear-start via-linear-mid to-linear-end text-white min-h-screen">
     <!-- Navigation -->
     <nav class="bg-black/20 backdrop-blur-sm border-b border-gray-700/50 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center py-4">
-                <a href="/" class="flex items-center space-x-3">
-                    <div class="text-3xl lightning-animation">⚡</div>
+                <a hx-get="/" class="flex cursor-pointer items-center space-x-3">
+                    <div class="text-3xl animate-lightning">⚡</div>
                     <h1 class="text-2xl font-bold">Volt</h1>
                 </a>
                 <div class="flex items-center space-x-6">
-                    <a href="features" class="{% if selected == 'features' %}text-volt-yellow {% else %}hover:text-volt-yellow{% endif %} transition-colors">Features</a>
+                    <a hx-get="features" class="{% if selected == 'features' %}text-volt-yellow {% else %}hover:text-volt-yellow{% endif %} cursor-pointer transition-colors">Features</a>
                     <a href="#performance" class="hover:text-volt-yellow transition-colors">Performance</a>
-                    <a href="#quickstart" class="hover:text-volt-yellow transition-colors">Quick Start</a>
-                    {% for item in extraitems %}
-                    <a href="#" class="hover:text-volt-yellow transition-colors">{{ item }}</a>
-                    {% endfor %}
-                    <a href="#"
+                    <a hx-get="quickstart" class="cursor-pointer hover:text-volt-yellow transition-colors">Quick Start</a>
+                    <a href="https://github.com/trkl-dev/volt" target="_blank"
                         class="bg-volt-yellow text-black px-6 py-2 rounded-lg font-semibold hover:bg-yellow-300 transition-colors">GitHub</a>
                 </div>
             </div>
         </div>
     </nav>
+    <section id="content">
     {% block content %}
     {% endblock %}
+    </section>
     <!-- Footer -->
     <footer class="bg-black/40 border-t border-gray-700/50 py-12">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
