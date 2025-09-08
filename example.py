@@ -1,4 +1,5 @@
 import time
+from http import HTTPStatus
 
 from volt.router import Handler, HttpRequest, HttpResponse, Redirect, route, middleware, run_server
 
@@ -33,7 +34,7 @@ def auth(request: HttpRequest, handler: Handler) -> HttpResponse:
     auth_success = True
     if auth_success:
         return handler(request)
-    return HttpResponse(body="get outta here!", status=403)
+    return HttpResponse(body="get outta here!", status=HTTPStatus.FORBIDDEN)
 
 
 @route("/", method="GET")

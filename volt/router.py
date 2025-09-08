@@ -1,10 +1,11 @@
 import ctypes
 import threading
 import signal
-import sys
 
 from collections.abc import Callable
 from typing import Any, Optional, TypedDict, List
+
+from http import HTTPStatus, cookies, HTTPMethod
 
 from . import zig_types as zt
 
@@ -13,7 +14,7 @@ Header = TypedDict('Header', {'name': str, 'value': str})
 
 
 class HttpRequest:
-    method: str
+    method: HTTPMethod
     path: str
     body: str
     body_len: int
@@ -24,7 +25,7 @@ class HttpRequest:
     hx_fragment: str
 
     def __init__(self, method: str, path: str, body: str, body_len: int, headers: list[Header], query_params: dict[str, str], route_params: dict[str, str|int]) -> None:
-        self.method = method
+        self.method = HTTPMethod[method]
         self.path = path
         self.body = body
         self.body_len = body_len
@@ -38,10 +39,10 @@ class HttpRequest:
 class HttpResponse:
     body: str
     content_type: str
-    status: int
+    status: HTTPStatus
     headers: list[Header]
 
-    def __init__(self, body: str = "", content_type: str = "text/plain", status: int = 200, headers: Optional[List[Header]] = None) -> None:
+    def __init__(self, body: str = "", content_type: str = "text/plain", status: HTTPStatus= HTTPStatus.OK, headers: Optional[List[Header]] = None) -> None:
         self.body = body
         self.content_type = content_type
         self.status = status
@@ -60,7 +61,7 @@ class Redirect(HttpResponse):
         headers = [
             Header(name="Location", value=route),
         ]
-        super().__init__(status=303, headers=headers)
+        super().__init__(status=HTTPStatus.FOUND, headers=headers)
 
 
 type Middleware = Callable[[HttpRequest, Handler], HttpResponse]
@@ -201,7 +202,7 @@ def route(path: str, method: str = "GET"):
 
             response.content_type = ctypes.cast(response_content_type_buffer, ctypes.c_char_p)
 
-            response.status = handler_response.status
+            response.status = handler_response.status.value
             
             header_array_type = zt.Header * len(handler_response.headers)
             header_array = header_array_type()

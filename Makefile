@@ -1,3 +1,5 @@
+all: watch
+
 build: 
 	zig build
 
