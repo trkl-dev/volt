@@ -51,6 +51,18 @@ class HttpResponse:
             self.headers = headers
 
 
+class Redirect(HttpResponse):
+    """
+    Redirect the browser to the location at 'route'.
+    This is not htmx-aware at this point
+    """
+    def __init__(self, route: str) -> None:
+        headers = [
+            Header(name="Location", value=route),
+        ]
+        super().__init__(status=303, headers=headers)
+
+
 type Middleware = Callable[[HttpRequest, Handler], HttpResponse]
 type Handler = Callable[[HttpRequest], HttpResponse]
 
@@ -247,21 +259,7 @@ def handle_sigint(signum, frame):
     zt.lib.shutdown_server()
     if server_thread is not None:
         server_thread.join()
-    sys.exit()
 
 
 signal.signal(signal.SIGINT, handle_sigint)
-
-
-class Redirect(HttpResponse):
-    """
-    Redirect the browser to the location at 'route'.
-    This is not htmx-aware at this point
-    """
-    def __init__(self, route: str) -> None:
-        headers = [
-            Header(name="Location", value=route),
-        ]
-        super().__init__(status=303, headers=headers)
-
-
+signal.signal(signal.SIGTERM, handle_sigint)

@@ -19,7 +19,7 @@ class Component:
     The Component class is the container for information pertaining to a particular 'block' 
     in a template. A component will associate a block within a template, with a set context 
     class for that block, which should contain all of the fields required for that block to 
-    render.
+    render. Ideally, there should be exactly one Component class defined, for every block.
     """
     template_name: str
     block_name = "content"
@@ -74,7 +74,6 @@ class NavBar(Component):
         super().__init__(context)
 
 
-
 class Base(Component):
     template_name = "base.html"
 
@@ -87,23 +86,21 @@ class Base(Component):
 
 
 # vvv Tentatively thinking these component classes should be generated? vvv #
-class Home(Component):
+class Home(Base):
     template_name = "home.html"
 
     @dataclass
-    class Context(Base.Context):
-        ...
+    class Context(Base.Context): ...
 
     def __init__(self, context: Context) -> None:
         super().__init__(context)
 
 
-class Features(Component):
+class Features(Base):
     template_name = "features.html"
 
     @dataclass
-    class Context(Base.Context):
-        ...
+    class Context(Base.Context): ...
 
     def __init__(self, context: Context) -> None:
         super().__init__(context)
