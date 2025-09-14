@@ -130,22 +130,34 @@ pub const Context = struct {
     allocator: std.mem.Allocator,
 };
 
+/// Accepting data that is potentially garbage collected, copy values to the heap, to be owned by Zig
+/// Returns a success int, 0 for failure, 1 for success, with the response_ptr referencing the stable,
+/// zig-owned response
 export fn save_response(
     ctx_ptr: *anyopaque,
-    body: [*:0]const u8,
+    body_volatile: [*:0]const u8,
     content_length: usize,
     status: c_int,
-    headers: [*]Header,
+    headers_volatile: [*]Header,
     num_headers: usize,
     response_ptr: **anyopaque,
 ) usize {
     log.debug("saving response...", .{});
     const ctx = @as(*Context, @ptrCast(@alignCast(ctx_ptr)));
+
     var response = ctx.allocator.create(Response) catch |err| {
         log.err("error allocating response: {any}", .{err});
         return 0;
     };
-    response.body = std.mem.span(body);
+
+    const body = ctx.allocator.alloc(u8, content_length) catch |err| {
+        log.err("error copying body: {any}", .{err});
+        return 0;
+    };
+    std.debug.print("{d}, {d}\n", .{ body.len, std.mem.span(body_volatile).len });
+    @memcpy(body, std.mem.span(body_volatile));
+    response.body = body;
+
     response.content_length = content_length;
     response.status = @enumFromInt(status);
 
@@ -153,10 +165,24 @@ export fn save_response(
         log.err("error allocating {d} headers: {any}", .{ num_headers, err });
         return 0;
     };
+    std.debug.print("num: {d}\n", .{header_list.len});
 
     for (header_list, 0..) |*header, i| {
-        header.name = std.mem.span(headers[i].name);
-        header.value = std.mem.span(headers[i].value);
+        const header_name_volatile = std.mem.span(headers_volatile[i].name);
+        const header_name = ctx.allocator.alloc(u8, header_name_volatile.len) catch |err| {
+            log.err("error allocating for header name: {any}", .{err});
+            return 0;
+        };
+        @memcpy(header_name, header_name_volatile);
+        header.name = header_name;
+
+        const header_value_volatile = std.mem.span(headers_volatile[i].value);
+        const header_value = ctx.allocator.alloc(u8, header_value_volatile.len) catch |err| {
+            log.err("error allocating for header value: {any}", .{err});
+            return 0;
+        };
+        @memcpy(header_value, header_value_volatile);
+        header.value = header_value;
     }
     response.headers = header_list;
 

@@ -261,10 +261,14 @@ pub fn getRoute(routes: []Route, route: []const u8) ?Route {
     return null;
 }
 
-fn testHandlerSuccessful(request: *http.Request, response: *http.Response) callconv(.c) void {
+fn testHandlerSuccessful(request: *http.Request, context: *http.Context) callconv(.c) ?*http.Response {
     _ = request;
-    response.status = 200;
+    var response = context.allocator.create(http.Response) catch {
+        @panic("error allocating response in test handler");
+    };
+    response.status = .ok;
     response.body = "hi there";
+    return response;
 }
 
 const TestCase = struct {
