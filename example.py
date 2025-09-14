@@ -1,4 +1,3 @@
-import gc
 import threading
 import time
 from http import HTTPStatus, cookies as HTTPCookies
@@ -7,19 +6,6 @@ from volt.router import Handler, Header, HttpRequest, HttpResponse, Redirect, ro
 
 from components import Home, Features, NavSelected, NavBar
 
-
-# TODO: Move this out of middleware, could probably even be in Zig
-@middleware
-def htmx(request: HttpRequest, handler: Handler) -> HttpResponse:
-    for header in request.headers:
-        if header["name"] == "HX-Request" and header["value"].lower() == "true":
-            request.hx_request = True
-
-        if header["name"] == "HX-Fragment":
-            request.hx_fragment = header["value"]
-
-
-    return handler(request)
 
 
 @middleware

@@ -119,6 +119,17 @@ type Middleware = Callable[[HttpRequest, Handler], HttpResponse]
 type Handler = Callable[[HttpRequest], HttpResponse]
 
 
+# TODO: Move this out of middleware, could probably even be in Zig
+def htmx_parse_request(request: HttpRequest):
+    """Parse the provided request and update HTMX related attributes accordingly"""
+    for header in request.headers:
+        if header.name == "HX-Request" and header.value.lower() == "true":
+            request.hx_request = True
+
+        if header.name == "HX-Fragment":
+            request.hx_fragment = header.value
+
+
 def wrap_middleware(middleware: Middleware, handler: Handler) -> Handler:
     def wrapped(request: HttpRequest):
         return middleware(request, handler)
@@ -211,10 +222,10 @@ def route(path: str, method: str = "GET"):
 
             request_headers = []
             for i in range(req.num_headers):
-                request_headers.append({
-                    "name": req.headers[i].name.decode('utf-8'),
-                    "value": req.headers[i].value.decode('utf-8'),
-                })
+                request_headers.append(Header(
+                    req.headers[i].name.decode('utf-8'),
+                    req.headers[i].value.decode('utf-8'),
+                ))
 
             request_object = HttpRequest(
                 method=ctypes.string_at(req.method).decode('utf-8'),
@@ -225,6 +236,8 @@ def route(path: str, method: str = "GET"):
                 query_params=query_params,
                 route_params=route_params,
             )
+            
+            htmx_parse_request(request_object)
 
             handler_with_middleware = create_middleware_stack(handler_fn, *middleware_list)
             handler_response = handler_with_middleware(request_object)
@@ -259,7 +272,7 @@ def route(path: str, method: str = "GET"):
             success: Literal[0, 1] = zt.lib.save_response(
                 context_ptr,
                 handler_response.body.encode('utf-8'),
-                len(handler_response.body),
+                len(handler_response.body.encode('utf-8')),
                 handler_response.status.value,
                 header_array,
                 num_headers,
