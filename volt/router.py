@@ -1,16 +1,51 @@
 import ctypes
+import gc
 import threading
 import signal
 
 from collections.abc import Callable
-from typing import Any, Optional, TypedDict, List
+from typing import Any, Literal, Optional, TypedDict, List
 
-from http import HTTPStatus, cookies, HTTPMethod
+from http import HTTPStatus, HTTPMethod, cookies as http_cookies
 
 from . import zig_types as zt
 
 
-Header = TypedDict('Header', {'name': str, 'value': str})
+class Header:
+    """
+    Format Ref: https://developers.cloudflare.com/rules/transform/request-header-modification/reference/header-format/
+    """
+    name: str
+    value: str
+
+    def __init__(self, name: str, value: str) -> None:
+        self.validate_name(name)
+        self.validate_value(value)
+
+        self.name = name
+        self.value = value
+
+    @classmethod
+    def validate_name(cls, name: str):
+        for char in name:
+            if char in "-_":
+                continue
+
+            if char.isalnum():
+                continue
+
+            raise Exception(f"Header name is invalid. Invalid char: {char}. Valid characters are: a-z, A-Z, 0-9 - and _")
+
+    @classmethod
+    def validate_value(cls, value: str) -> None:
+        for char in value:
+            if char in r"_ :;.,\/\"'?!(){}[]@<>=-+*#$&`|~^%":
+                continue
+
+            if char.isalnum():
+                continue
+
+            raise Exception(f"Header name is invalid. Invalid char: {char}. Valid characters are: a-z, A-Z, 0-9, _ :;.,\/\"'?!(){{}}[]@<>=-+*#$&`|~^%")
 
 
 class HttpRequest:
@@ -24,7 +59,16 @@ class HttpRequest:
     hx_request: bool
     hx_fragment: str
 
-    def __init__(self, method: str, path: str, body: str, body_len: int, headers: list[Header], query_params: dict[str, str], route_params: dict[str, str|int]) -> None:
+    def __init__(
+            self,
+            method: str,
+            path: str,
+            body: str,
+            body_len: int,
+            headers: list[Header],
+            query_params: dict[str, str],
+            route_params: dict[str, str|int],
+        ) -> None:
         self.method = HTTPMethod[method]
         self.path = path
         self.body = body
@@ -41,15 +85,22 @@ class HttpResponse:
     content_type: str
     status: HTTPStatus
     headers: list[Header]
+    cookies: Optional[http_cookies.SimpleCookie]
 
-    def __init__(self, body: str = "", content_type: str = "text/plain", status: HTTPStatus= HTTPStatus.OK, headers: Optional[List[Header]] = None) -> None:
+    def __init__(
+            self,
+            body: str = "",
+            content_type: str = "text/html",
+            status: HTTPStatus= HTTPStatus.OK,
+            headers: Optional[List[Header]] = None,
+            cookies: Optional[http_cookies.SimpleCookie] = None,
+        ) -> None:
         self.body = body
         self.content_type = content_type
         self.status = status
 
-        self.headers = []
-        if headers is not None:
-            self.headers = headers
+        self.headers = headers if headers is not None else []
+        self.cookies = cookies
 
 
 class Redirect(HttpResponse):
@@ -95,16 +146,10 @@ RouteRegister = TypedDict('RouteRegister', {'path': bytes, 'method': bytes, 'han
 routes: List[RouteRegister] = []
 
 
-def c_encode_string(string: str) -> tuple[ctypes.c_char_p, int]:
-    encoded = string.encode('utf-8')
-    buffer = ctypes.create_string_buffer(encoded, len(encoded) + 1)
-    return ctypes.cast(buffer, ctypes.c_char_p), len(encoded)
-
-
 def route(path: str, method: str = "GET"):
     """Register a route handler on 'path'"""
     def decorator(handler_fn: Callable[[HttpRequest], HttpResponse]) -> Any:
-        def request_handler(request_ptr: zt.HttpRequestPtr, response_ptr: zt.HttpResponsePtr):
+        def request_handler(request_ptr: zt.HttpRequestPtr, context_ptr: ctypes.c_void_p) -> Optional[int]:
             req = request_ptr.contents
 
             # QUERY PARAMS HANDLING
@@ -118,7 +163,6 @@ def route(path: str, method: str = "GET"):
                 size
             )
             
-            # raise Exception()
             query_params = {}
             for i in range(num_keys):
                 if keys_array[i]:
@@ -185,34 +229,47 @@ def route(path: str, method: str = "GET"):
             handler_with_middleware = create_middleware_stack(handler_fn, *middleware_list)
             handler_response = handler_with_middleware(request_object)
 
-            response = response_ptr.contents
+            num_headers = len(handler_response.headers) + 1
+            if handler_response.cookies is not None:
+                # Each cookie is a separate header
+                num_headers += len(handler_response.cookies.items())
 
+            print(f"Num headers: {num_headers}")
+            header_array = (zt.Header * num_headers)()
 
-            # NOTE: Was previously directly assigning response_body to response.body, rather than using string_buffer.
-            # Something about this was allowing GC to cause issues with the response body not persisting, and being 
-            # collected. Using string_buffer _seems_ to create an additional reference that otherwise would not exist,
-            # which seems to have prevented GC. That being said, rigorous simulation testing on this, and other fields
-            # to ensure GC is not still occurring at random is necessary. Ideally a better understanding in general too.
-            # response.body = handler_response.body.encode('utf-8')
-            response.body, response.content_length = c_encode_string(handler_response.body)
-
-            # Content-Type parsing/handling
-            response_content_type = handler_response.content_type.encode('utf-8')
-            response_content_type_buffer = ctypes.create_string_buffer(response_content_type)
-
-            response.content_type = ctypes.cast(response_content_type_buffer, ctypes.c_char_p)
-
-            response.status = handler_response.status.value
+            # set content-type as the next headers after the custom headers
+            header_array[0].name = "content-type".encode('utf-8')
+            header_array[0].value = handler_response.content_type.encode('utf-8')
             
-            header_array_type = zt.Header * len(handler_response.headers)
-            header_array = header_array_type()
+            if len(handler_response.headers) != 0:
+                for i, header in enumerate(handler_response.headers, start=1):
+                    header_array[i].name = header.name.encode('utf-8')
+                    header_array[i].value = header.value.encode('utf-8')
+            else:
+                print("no custom headers in response")
 
-            response.num_headers = len(handler_response.headers)
-            for i, h in enumerate(handler_response.headers):
-                header_array[i].name, _ = c_encode_string(h["name"])
-                header_array[i].value, _ = c_encode_string(h["value"])
+            if handler_response.cookies is not None:
+                for i, cookie in enumerate(handler_response.cookies.items(), start=len(handler_response.headers) + 1):
+                    header_array[i].name = "Set-Cookie".encode('utf-8')
+                    header_array[i].value = cookie[1].OutputString().encode('utf-8')
+            else:
+                print("no cookies in response")
 
-            response.headers = header_array
+            r_ptr = ctypes.c_void_p()
+            success: Literal[0, 1] = zt.lib.save_response(
+                context_ptr,
+                handler_response.body.encode('utf-8'),
+                len(handler_response.body),
+                handler_response.status.value,
+                header_array,
+                num_headers,
+                ctypes.byref(r_ptr),
+            )
+
+            if success == 0:
+                raise Exception("Error calling save_response")
+
+            return r_ptr.value
 
         cb = zt.CALLBACK(request_handler)
         p = path.encode('utf-8')
@@ -228,6 +285,12 @@ def route(path: str, method: str = "GET"):
     return decorator
 
 
+def collect_garbage():
+    print("py: running garbage collection...")
+    gc.collect()
+    print("py: garbage collection complete.")
+
+
 def _run_server(server_addr, server_port):
     # TODO: Check that server_port here is only u16
     def run():
@@ -240,7 +303,7 @@ def _run_server(server_addr, server_port):
             routes_array[i].handler = r["handler"]
         
         print("py: calling zig run_server")
-        zt.lib.run_server(server_addr.encode('utf-8'), server_port, routes_array, len(routes))
+        zt.lib.run_server(server_addr.encode('utf-8'), server_port, routes_array, len(routes), zt.GC_FN(collect_garbage))
 
     return run
 

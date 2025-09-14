@@ -1,7 +1,9 @@
+import gc
+import threading
 import time
-from http import HTTPStatus
+from http import HTTPStatus, cookies as HTTPCookies
 
-from volt.router import Handler, HttpRequest, HttpResponse, Redirect, route, middleware, run_server
+from volt.router import Handler, Header, HttpRequest, HttpResponse, Redirect, route, middleware, run_server
 
 from components import Home, Features, NavSelected, NavBar
 
@@ -45,7 +47,24 @@ def root(request: HttpRequest) -> HttpResponse:
         oob=[NavBar(NavBar.Context(request=request, selected=NavSelected.HOME, oob=[]))],
     )
 
-    return HttpResponse(Home(context).render(request))
+    cookies = HTTPCookies.SimpleCookie()
+    cookies["this"] = "that"
+    cookies["this"]["path"] = "other"
+    cookies["something"] = "else"
+    return HttpResponse(
+        Home(context).render(request),
+        cookies=cookies,
+        headers=[
+            Header("custom-header-1", "a value"),
+            Header("custom-header-2", "another value"),
+            Header("custom-header-a", "a value"),
+            Header("custom-header-b", "a value"),
+            Header("custom-header-c", "a value"),
+            Header("custom-header-d", "another value"),
+            Header("custom-header-e", "another value"),
+            Header("custom-header-r", "another value"),
+        ]
+    )
 
 
 @route("/features", method="GET")
@@ -92,5 +111,62 @@ def slow(_: HttpRequest) -> HttpResponse:
     return HttpResponse(f"this is the slow page")
 
 
+@route("/cpu-heavy")
+def cpu_heavy_handler(request: HttpRequest) -> HttpResponse:
+    """CPU-intensive handler that will hold the GIL"""
+    thread_id = threading.get_ident()
+    start_time = time.time()
+    
+    # Pure CPU work - no I/O, will hold GIL the entire time
+    result = 0
+    for i in range(10_000_000):  # 10 million iterations
+        result += i * i
+        if i % 1_000_000 == 0:
+            # This won't help with GIL, but shows progress
+            elapsed = time.time() - start_time
+            print(f"Thread {thread_id}: Progress {i//1_000_000}/10, elapsed: {elapsed:.2f}s")
+    
+    total_time = time.time() - start_time
+    body =  f"CPU work complete! Thread: {thread_id}, Result: {result}, Time: {total_time:.2f}s"
+    content_type = "text/plain"
+    name = "X-Thread-ID"
+    headers = [Header(name=name, value=str(thread_id)), Header(name="something", value="else")]
+    return HttpResponse(
+        body,
+        content_type=content_type,
+        headers=headers,
+    )
+
+@route("/mixed-work") 
+def mixed_work_handler(request: HttpRequest) -> HttpResponse:
+    """Mixed CPU + I/O handler - shows when GIL gets released"""
+    thread_id = threading.get_ident()
+    start_time = time.time()
+    
+    print(f"Thread {thread_id}: Starting mixed work")
+    
+    # CPU work (holds GIL)
+    result = 0
+    for i in range(3_000_000):  # 3 million iterations
+        result += i * i
+    
+    cpu_time = time.time() - start_time
+    print(f"Thread {thread_id}: CPU work done in {cpu_time:.2f}s")
+    
+    # I/O work (releases GIL during the sleep)
+    time.sleep(2.0)  # This will release the GIL!
+    
+    # More CPU work (re-acquires and holds GIL)
+    for i in range(2_000_000):  # 2 million more
+        result += i * i
+    
+    total_time = time.time() - start_time
+    return HttpResponse(
+        f"Mixed work complete! Thread: {thread_id}, Result: {result}, Total time: {total_time:.2f}s",
+        headers=[{"name": "X-Thread-ID", "value": str(thread_id)}]
+    )
+
 if __name__ == "__main__":
+    # gc.set_debug(gc.DEBUG_LEAK)
+    # gc.disable()
     run_server()

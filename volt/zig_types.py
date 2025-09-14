@@ -4,7 +4,6 @@ import faulthandler
 import platform
 from typing import TYPE_CHECKING, Any
 
-
 # Better logging of panic errors
 faulthandler.enable()
 
@@ -23,6 +22,9 @@ class Header(ctypes.Structure):
         ("name", ctypes.c_char_p),
         ("value", ctypes.c_char_p),
     ]
+
+    def __str__(self) -> str:
+        return f"ctypes Header<{self.name}: {self.value}>"
 
 
 class HttpRequest(ctypes.Structure):
@@ -65,7 +67,6 @@ lib.query_params_get_keys.argtypes = [
     ctypes.POINTER(ctypes.c_size_t),
     ctypes.c_size_t,
 ]
-
 lib.query_params_get_keys.restype = ctypes.c_size_t
 
 lib.query_params_size.argtypes = [ctypes.POINTER(HttpRequest)]
@@ -75,18 +76,21 @@ lib.query_params_get_value.argtypes = [ctypes.POINTER(HttpRequest), ctypes.c_cha
 lib.query_params_get_value.restype = ctypes.c_size_t
 
 
-class HttpResponse(ctypes.Structure):
-    _fields_ = [
-        ("body", ctypes.c_char_p),
-        ("content_length", ctypes.c_size_t),
-        ("content_type", ctypes.c_char_p),
-        ("status", ctypes.c_int),
-        ("headers", ctypes.POINTER(Header)),
-        ("num_headers", ctypes.c_size_t),
-    ]
+lib.save_response.argtypes = [
+    ctypes.c_void_p, # ctx_ptr
+    ctypes.c_char_p, # body
+    ctypes.c_size_t, # content_length
+    ctypes.c_int, # status
+    ctypes.POINTER(Header), # headers
+    ctypes.c_size_t, # num_headers
+    ctypes.c_void_p, # response_ptr
+]
+
+lib.save_response.restype = ctypes.c_size_t
 
 
-CALLBACK = ctypes.CFUNCTYPE(None, ctypes.POINTER(HttpRequest), ctypes.POINTER(HttpResponse))
+CALLBACK = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(HttpRequest), ctypes.c_void_p)
+GC_FN = ctypes.CFUNCTYPE(None)
 
 class Route(ctypes.Structure):
     _fields_ = [
@@ -105,7 +109,5 @@ lib.shutdown_server.restype = None
 
 if TYPE_CHECKING:
     HttpRequestPtr = ctypes._Pointer[HttpRequest]
-    HttpResponsePtr = ctypes._Pointer[HttpResponse]
 else:
     HttpRequestPtr = Any
-    HttpResponsePtr = Any

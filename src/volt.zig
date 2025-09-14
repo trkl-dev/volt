@@ -10,7 +10,9 @@ const expect = std.testing.expect;
 const log = std.log.scoped(.zig);
 const test_log = std.log.scoped(.zig_test);
 
-pub export fn run_server(server_addr: [*:0]const u8, server_port: u16, routes_to_register: [*]http.Route, num_routes: u16) void {
+var py_collect_garbage: http.GCFn = undefined;
+
+pub export fn run_server(server_addr: [*:0]const u8, server_port: u16, routes_to_register: [*]http.Route, num_routes: u16, garbage_collection_func: http.GCFn) void {
     log.debug("run_server called", .{});
     var gpa = std.heap.DebugAllocator(.{}).init;
     const allocator = gpa.allocator();
@@ -24,6 +26,8 @@ pub export fn run_server(server_addr: [*:0]const u8, server_port: u16, routes_to
         log.err("error registering routes: {any}", .{err});
         return;
     };
+
+    py_collect_garbage = garbage_collection_func;
 
     runServer(allocator, server_addr, server_port, routes, 0, &should_exit) catch |err| {
         log.err("error running server: {any}", .{err});
@@ -309,7 +313,7 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
             }
             // Using the state of .received_head to check whether the request has already been responded to
             if (request.server.reader.state != .received_head) {
-                log.err("not in .received_head state, no need to create response", .{});
+                log.debug("not in .received_head state, no need to create response", .{});
                 return;
             }
             log.err("request not already responded to, responding with 500", .{});
@@ -606,15 +610,6 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
     } else {
         request_body = &[_]u8{};
     }
-    var res = http.Response{
-        .body = "",
-        .content_length = 0,
-        .content_type = null,
-        .status = 0,
-        .headers = &.{},
-        .num_headers = 0,
-    };
-
     var req = http.Request{
         .path = path_nt,
         .method = method_nt,
@@ -628,34 +623,27 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
 
     const handler = matched_route.?.route.handler;
 
-    handler(&req, &res);
-    if (res.status == 0) {
-        try request.respond("", .{ .status = std.http.Status.internal_server_error });
-        return error.UnknownErrorInPythonCallback;
+    var context = http.Context{
+        .allocator = arena_allocator,
+    };
+
+    const res = handler(&req, &context);
+    if (res == null) {
+        return error.NullResponse;
     }
+    const response = res.?;
+
+    // Run python garbage collection to ensure that any memory worked with is stable
+    // TODO: This should really only occur in debug mode, or something like that
+    py_collect_garbage();
 
     log.debug("route handling complete", .{});
 
-    const status: std.http.Status = @enumFromInt(res.status);
-    const response_body: []const u8 = std.mem.span(res.body);
-
-    const header_list = try allocator.alloc(std.http.Header, res.num_headers);
-
-    for (header_list, 0..) |*header, ii| {
-        const c_header = res.headers[ii];
-        header.name = std.mem.span(c_header.name);
-        header.value = std.mem.span(c_header.value);
-    }
-
-    for (header_list) |header| {
-        log.debug("response header name: {s}, value: {s}", .{ header.name, header.value });
-    }
-
-    try request.respond(response_body, std.http.Server.Request.RespondOptions{
-        .status = status,
-        .extra_headers = header_list,
+    try request.respond(response.body, std.http.Server.Request.RespondOptions{
+        .status = response.status,
+        .extra_headers = response.headers,
     });
-    return status;
+    return response.status;
 }
 
 // const Route = struct {

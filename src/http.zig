@@ -101,15 +101,6 @@ export fn query_params_get_keys(request: *Request, keys_array: [*][*:0]const u8,
     return count;
 }
 
-pub const Response = extern struct {
-    body: [*:0]const u8,
-    content_length: usize,
-    content_type: ?[*:0]const u8,
-    status: c_int,
-    headers: [*]Header,
-    num_headers: usize,
-};
-
 pub const Header = extern struct {
     name: [*:0]const u8,
     value: [*:0]const u8,
@@ -121,4 +112,55 @@ pub const Route = extern struct {
     handler: HandlerFn,
 };
 
-pub const HandlerFn = *const fn (*Request, *Response) callconv(.c) void;
+pub const Response = struct {
+    body: []const u8,
+    content_length: usize,
+    content_type: []const u8,
+    status: std.http.Status,
+    headers: []std.http.Header,
+    num_headers: usize,
+};
+
+pub const HandlerFn = *const fn (*Request, *Context) callconv(.c) ?*Response;
+
+/// Callback function for forcing python to collect garbage.
+pub const GCFn = *const fn () callconv(.c) void;
+
+pub const Context = struct {
+    allocator: std.mem.Allocator,
+};
+
+export fn save_response(
+    ctx_ptr: *anyopaque,
+    body: [*:0]const u8,
+    content_length: usize,
+    status: c_int,
+    headers: [*]Header,
+    num_headers: usize,
+    response_ptr: **anyopaque,
+) usize {
+    log.debug("saving response...", .{});
+    const ctx = @as(*Context, @ptrCast(@alignCast(ctx_ptr)));
+    var response = ctx.allocator.create(Response) catch |err| {
+        log.err("error allocating response: {any}", .{err});
+        return 0;
+    };
+    response.body = std.mem.span(body);
+    response.content_length = content_length;
+    response.status = @enumFromInt(status);
+
+    const header_list = ctx.allocator.alloc(std.http.Header, num_headers) catch |err| {
+        log.err("error allocating {d} headers: {any}", .{ num_headers, err });
+        return 0;
+    };
+
+    for (header_list, 0..) |*header, i| {
+        header.name = std.mem.span(headers[i].name);
+        header.value = std.mem.span(headers[i].value);
+    }
+    response.headers = header_list;
+
+    response_ptr.* = response;
+    log.debug("response saved", .{});
+    return 1;
+}
