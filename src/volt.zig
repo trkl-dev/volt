@@ -21,6 +21,10 @@ pub export fn run_server(
     garbage_collection_func: http.GCFn,
     log_callback_func: http.LogFn,
 ) void {
+    // Must be set first so logging can proceed
+    py_log_callback = log_callback_func;
+    py_collect_garbage = garbage_collection_func;
+
     var gpa = std.heap.DebugAllocator(.{}).init;
     const allocator = gpa.allocator();
 
@@ -33,9 +37,6 @@ pub export fn run_server(
         log.err("error registering routes: {any}", .{err});
         return;
     };
-
-    py_collect_garbage = garbage_collection_func;
-    py_log_callback = log_callback_func;
 
     runServer(allocator, server_addr, server_port, routes, 0, &should_exit) catch |err| {
         log.err("error running server: {any}", .{err});
@@ -200,7 +201,6 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
     while (true) {
         var request = http_server.receiveHead() catch |err| switch (err) {
             error.HttpConnectionClosing => {
-                log.debug("Connection closing.", .{});
                 return;
             },
             // ReadFailed is returned for numerous errors, with the actual error on conn_reader.file_reader.err
@@ -560,9 +560,6 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
         .allocator = arena_allocator,
     };
 
-    const v: c_int = 3;
-    _ = v;
-
     var response: *http.Response = undefined;
     const success = handler(&req, &response, &context);
     log.debug("handler complete", .{});
@@ -570,7 +567,6 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
         log.err("handler was unsuccessful", .{});
         return error.HandlerFailure;
     }
-    // const response = res.?;
 
     // Run python garbage collection to ensure that any memory worked with is stable
     // TODO: This should really only occur in debug mode, or something like that
@@ -580,24 +576,16 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
 
     log.debug("route handling complete", .{});
 
-    // for (response.headers) |header| {
-    //     log.err("header: {s}\n", .{header.name});
-    // }
+    log.debug("body: {s}", .{response.body});
+    // std.debug.print("body: {s}", .{response.body});
+    log.debug("status: {}", .{response.status});
+    log.debug("len: {d}", .{response.headers.len});
 
-    log.err("body: {s}", .{response.body});
-    log.err("status: {}", .{response.status});
-    log.err("len: {d}", .{response.headers.len});
-
-    // if (response.headers.len > 0) {
+    std.debug.assert(response.headers.len > 0);
     try request.respond(response.body, std.http.Server.Request.RespondOptions{
         .status = response.status,
         .extra_headers = response.headers,
     });
-    // } else {
-    //     try request.respond(response.body, std.http.Server.Request.RespondOptions{
-    //         .status = response.status,
-    //     });
-    // }
     return response.status;
 }
 
@@ -622,36 +610,38 @@ test shutdown_server {
 
 pub const std_options: std.Options = .{
     // Set the log level to info
-    .log_level = .info,
+    .log_level = .debug,
 
     // Define logFn to override the std implementation
     .logFn = pyLogger,
 };
 
-// const level_txt = comptime message_level.asText();
-// const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
-// var buffer: [64]u8 = undefined;
-// const stderr = std.debug.lockStderrWriter(&buffer);
-// defer std.debug.unlockStderrWriter();
-// nosuspend stderr.print(level_txt ++ prefix2 ++ format ++ "\n", args) catch return;
 pub fn pyLogger(
     comptime level: std.log.Level,
     comptime scope: @Type(.enum_literal),
     comptime format: []const u8,
     args: anytype,
 ) void {
+    _ = scope;
+    // std.debug.print("called\n", .{});
     // Ignore all non-error logging from sources other than
     // .my_project, .nice_library and the default
-    const scope_prefix = "(" ++ switch (scope) {
-        .my_project, .nice_library, std.log.default_log_scope => @tagName(scope),
-        else => if (@intFromEnum(level) <= @intFromEnum(std.log.Level.err))
-            @tagName(scope)
-        else
-            return,
-    } ++ "): ";
+    // const scope_prefix = "(" ++ switch (scope) {
+    //     .my_project, .nice_library, std.log.default_log_scope => @tagName(scope),
+    //     else => if (@intFromEnum(level) <= @intFromEnum(std.log.Level.err))
+    //         @tagName(scope)
+    //     else
+    //         return,
+    // } ++ "): ";
 
-    const prefix = "[" ++ comptime level.asText() ++ "] " ++ scope_prefix;
+    // const prefix = "[" ++ comptime level.asText() ++ "] " ++ scope_prefix;
 
+    // const level_txt = comptime level.asText();
+    // const prefix = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
+    // var buffer: [64]u8 = undefined;
+    // const stderr = std.debug.lockStderrWriter(&buffer);
+    // defer std.debug.unlockStderrWriter();
+    // nosuspend stderr.print(level_txt ++ prefix2 ++ format ++ "\n", args) catch return;
     // Print the message to stderr, silently ignoring any errors
     std.debug.assert(py_log_callback != null);
     const level_int = switch (level) {
@@ -662,7 +652,7 @@ pub fn pyLogger(
     };
     var log_buffer: [64]u8 = undefined;
     var writer = std.io.Writer.fixed(log_buffer[0 .. log_buffer.len - 1]);
-    writer.print(prefix ++ format, args) catch return;
+    writer.print(format, args) catch return;
     log_buffer[writer.end] = 0;
     const message = log_buffer[0..writer.end :0];
     py_log_callback.?(message, level_int);

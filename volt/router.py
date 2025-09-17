@@ -302,7 +302,7 @@ def route(path: str, method: str = "GET"):
         try:
             cb = zt.CALLBACK(request_handler)
             p = path.encode('utf-8')
-            log.info("py: registering_route: ", p)
+            log.info("registering_route: %s", p)
             path_list.append(p)  # Prevent GC of path
             routes.append({
                 'path': p,
@@ -318,9 +318,9 @@ def route(path: str, method: str = "GET"):
 
 @ctypes.CFUNCTYPE(None)
 def collect_garbage():
-    log.debug("py: running garbage collection...")
+    log.debug("running garbage collection...")
     gc.collect()
-    log.debug("py: garbage collection complete.")
+    log.debug("garbage collection complete.")
 
 
 @ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_int)
@@ -347,7 +347,7 @@ def _run_server(server_addr, server_port):
             routes_array[i].method = r["method"]
             routes_array[i].handler = r["handler"]
         
-        log.info("py: calling zig run_server")
+        log.info("calling zig run_server")
         zt.lib.run_server(server_addr.encode('utf-8'), server_port, routes_array, len(routes), collect_garbage, log_message)
 
     return run
@@ -370,7 +370,7 @@ def shutdown():
 
 
 def handle_sigint(signum, frame):
-    log.warning("\nCaught ctrl+c - shutting down Zig server...")
+    log.warning("Caught ctrl+c - shutting down Zig server...")
     shutdown()
 
 

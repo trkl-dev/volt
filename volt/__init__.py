@@ -1,3 +1,5 @@
+from . import log
+
 from pathlib import Path
 from subprocess import PIPE, STDOUT, run
 
