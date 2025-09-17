@@ -1,11 +1,25 @@
 all: watch
 
 build: 
-	zig build -freference-trace
+	zig build -Doptimize=Debug -freference-trace
 
 run:
 	-pkill -TERM -f "python example.py" && sleep 2 || pkill -KILL -f "python example.py"
 	python example.py &
+
+debug:
+	-pkill -TERM -f "python example.py" && sleep 2 || pkill -KILL -f "python example.py"
+	lldb python example.py
+
+debug-test:
+	-pkill -TERM -f "python example.py" && sleep 2 || pkill -KILL -f "python example.py"
+	lldb pytest
+
+test: build
+	pytest
+
+test-verbose: build
+	pytest -svv
 
 tailwind:
 	tailwindcss -i static/tailwind.css -o static/styles.css

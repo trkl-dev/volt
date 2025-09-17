@@ -11,9 +11,16 @@ const log = std.log.scoped(.zig);
 const test_log = std.log.scoped(.zig_test);
 
 var py_collect_garbage: ?http.GCFn = null;
+var py_log_callback: ?http.LogFn = null;
 
-pub export fn run_server(server_addr: [*:0]const u8, server_port: u16, routes_to_register: [*]http.Route, num_routes: u16, garbage_collection_func: http.GCFn) void {
-    log.debug("run_server called", .{});
+pub export fn run_server(
+    server_addr: [*:0]const u8,
+    server_port: u16,
+    routes_to_register: [*]http.Route,
+    num_routes: u16,
+    garbage_collection_func: http.GCFn,
+    log_callback_func: http.LogFn,
+) void {
     var gpa = std.heap.DebugAllocator(.{}).init;
     const allocator = gpa.allocator();
 
@@ -28,11 +35,13 @@ pub export fn run_server(server_addr: [*:0]const u8, server_port: u16, routes_to
     };
 
     py_collect_garbage = garbage_collection_func;
+    py_log_callback = log_callback_func;
 
     runServer(allocator, server_addr, server_port, routes, 0, &should_exit) catch |err| {
         log.err("error running server: {any}", .{err});
         return;
     };
+    should_exit = false;
 }
 
 /// stop_iter will stop the server after stop_iter iterations, unless stop_iter is 0. This is for testing,
@@ -148,7 +157,6 @@ fn runServerWithErrorHandler(
 }
 
 fn thandler(request: *http.Request, context: *http.Context) callconv(.c) ?*http.Response {
-    std.debug.print("hi\n", .{});
     var response = context.allocator.create(http.Response) catch {
         @panic("error allocating response in test handler");
     };
@@ -159,94 +167,8 @@ fn thandler(request: *http.Request, context: *http.Context) callconv(.c) ?*http.
         @panic("err");
     };
     response.body = "a response body";
-    std.debug.print("hi\n", .{});
     return response;
 }
-
-// test runServer {
-//     const allocator = std.testing.allocator;
-//     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-//     defer arena.deinit();
-//
-//     const arena_allocator = arena.allocator();
-//
-//     const r = [_]http.Route{
-//         .{
-//             .name = "/blog",
-//             .method = "GET",
-//             .handler = testHandlerSuccessful,
-//         },
-//         .{
-//             .name = "/home",
-//             .method = "GET",
-//             .handler = testHandlerForbidden,
-//         },
-//         .{
-//             .name = "/content",
-//             .method = "POST",
-//             .handler = thandler,
-//         },
-//     };
-//     const routes_to_register: [*]const http.Route = &r;
-//
-//     const routes = try registerRoutes(arena_allocator, routes_to_register, r.len);
-//
-//     const thread = try std.Thread.spawn(
-//         std.Thread.SpawnConfig{
-//             .stack_size = std.Thread.SpawnConfig.default_stack_size,
-//             .allocator = null,
-//         },
-//         runServerWithErrorHandler, // Can't have an error returning function used as a thread function
-//         .{ allocator, "127.0.0.1", 1235, routes, 0, &should_exit }, // different port to regular
-//     );
-//     defer {
-//         shutdown_server();
-//         thread.join();
-//     }
-//
-//     var client = std.http.Client{ .allocator = allocator };
-//     defer client.deinit();
-//
-//     const homeResponse = try client.fetch(
-//         .{
-//             .location = .{ .url = "http://127.0.0.1:1235/home" },
-//             .keep_alive = true,
-//         },
-//     );
-//     std.testing.expectEqual(std.http.Status.forbidden, homeResponse.status) catch |err| {
-//         std.debug.print("url: http://127.0.0.1:1235/home\n", .{});
-//         return err;
-//     };
-//
-//     const blogResponse = try client.fetch(
-//         .{
-//             .location = .{ .url = "http://127.0.0.1:1235/blog" },
-//             .keep_alive = true,
-//         },
-//     );
-//     std.testing.expectEqual(std.http.Status.ok, blogResponse.status) catch |err| {
-//         std.debug.print("url: http://127.0.0.1:1235/blog\n", .{});
-//         return err;
-//     };
-//
-//     var postResponseBody: [1000]u8 = undefined;
-//     var responseBodyWriter = std.io.Writer.fixed(&postResponseBody);
-//     const postResponse = try client.fetch(
-//         .{
-//             .response_writer = &responseBodyWriter,
-//             .method = .POST,
-//             .payload = "this is some POST content",
-//
-//             .location = .{ .url = "http://127.0.0.1:1235/content" },
-//             .keep_alive = true,
-//         },
-//     );
-//     std.testing.expectEqual(std.http.Status.ok, postResponse.status) catch |err| {
-//         std.debug.print("url: http://127.0.0.1:1235/content\n", .{});
-//         return err;
-//     };
-//     try std.testing.expectEqualStrings("a response body", postResponseBody[0..responseBodyWriter.end]);
-// }
 
 fn testHandlerSuccessful(request: *http.Request, context: *http.Context) callconv(.c) ?*http.Response {
     _ = request;
@@ -326,7 +248,7 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
                 return;
             }
             log.err("request not already responded to, responding with 500", .{});
-            request.respond("", .{ .status = .internal_server_error }) catch |res_err| {
+            request.respond("", .{ .status = .internal_server_error, .keep_alive = false }) catch |res_err| {
                 log.err("Error trying to respond to request with internal_server_error. Server state: {any}, err: {any}", .{ request.server.reader.state, res_err });
                 return;
             };
@@ -542,7 +464,9 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
         try request.respond("", .{ .status = .forbidden });
         return .forbidden;
     }
-
+    // if (true) {
+    //     @panic("ahhh");
+    // }
     // Static file serving
     if (std.mem.startsWith(u8, request.head.target, "/static/")) {
         const status = try handleStaticRoute(allocator, request);
@@ -636,11 +560,17 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
         .allocator = arena_allocator,
     };
 
-    const res = handler(&req, &context);
-    if (res == null) {
-        return error.NullResponse;
+    const v: c_int = 3;
+    _ = v;
+
+    var response: *http.Response = undefined;
+    const success = handler(&req, &response, &context);
+    log.debug("handler complete", .{});
+    if (success == 0) {
+        log.err("handler was unsuccessful", .{});
+        return error.HandlerFailure;
     }
-    const response = res.?;
+    // const response = res.?;
 
     // Run python garbage collection to ensure that any memory worked with is stable
     // TODO: This should really only occur in debug mode, or something like that
@@ -658,16 +588,16 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
     log.err("status: {}", .{response.status});
     log.err("len: {d}", .{response.headers.len});
 
-    if (response.headers.len > 0) {
-        try request.respond(response.body, std.http.Server.Request.RespondOptions{
-            .status = response.status,
-            .extra_headers = response.headers,
-        });
-    } else {
-        try request.respond(response.body, std.http.Server.Request.RespondOptions{
-            .status = response.status,
-        });
-    }
+    // if (response.headers.len > 0) {
+    try request.respond(response.body, std.http.Server.Request.RespondOptions{
+        .status = response.status,
+        .extra_headers = response.headers,
+    });
+    // } else {
+    //     try request.respond(response.body, std.http.Server.Request.RespondOptions{
+    //         .status = response.status,
+    //     });
+    // }
     return response.status;
 }
 
@@ -675,7 +605,7 @@ var should_exit = false;
 
 export fn shutdown_server() void {
     log.info("shutting down server...", .{});
-    std.debug.assert(!should_exit);
+    // std.debug.assert(!should_exit);
     should_exit = true;
 }
 
@@ -688,4 +618,52 @@ test shutdown_server {
     try std.testing.expect(!should_exit);
     shutdown_server();
     try std.testing.expect(should_exit);
+}
+
+pub const std_options: std.Options = .{
+    // Set the log level to info
+    .log_level = .info,
+
+    // Define logFn to override the std implementation
+    .logFn = pyLogger,
+};
+
+// const level_txt = comptime message_level.asText();
+// const prefix2 = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
+// var buffer: [64]u8 = undefined;
+// const stderr = std.debug.lockStderrWriter(&buffer);
+// defer std.debug.unlockStderrWriter();
+// nosuspend stderr.print(level_txt ++ prefix2 ++ format ++ "\n", args) catch return;
+pub fn pyLogger(
+    comptime level: std.log.Level,
+    comptime scope: @Type(.enum_literal),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    // Ignore all non-error logging from sources other than
+    // .my_project, .nice_library and the default
+    const scope_prefix = "(" ++ switch (scope) {
+        .my_project, .nice_library, std.log.default_log_scope => @tagName(scope),
+        else => if (@intFromEnum(level) <= @intFromEnum(std.log.Level.err))
+            @tagName(scope)
+        else
+            return,
+    } ++ "): ";
+
+    const prefix = "[" ++ comptime level.asText() ++ "] " ++ scope_prefix;
+
+    // Print the message to stderr, silently ignoring any errors
+    std.debug.assert(py_log_callback != null);
+    const level_int = switch (level) {
+        .debug => 0,
+        .info => 1,
+        .warn => 2,
+        .err => 3,
+    };
+    var log_buffer: [64]u8 = undefined;
+    var writer = std.io.Writer.fixed(log_buffer[0 .. log_buffer.len - 1]);
+    writer.print(prefix ++ format, args) catch return;
+    log_buffer[writer.end] = 0;
+    const message = log_buffer[0..writer.end :0];
+    py_log_callback.?(message, level_int);
 }

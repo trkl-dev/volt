@@ -1,0 +1,217 @@
+import pytest
+import requests
+
+from http import HTTPStatus, cookies as HTTPCookies
+from volt.router import Header, HttpRequest, HttpResponse, route, run_server, shutdown
+
+
+import faulthandler
+faulthandler.enable()
+
+
+@pytest.fixture(scope="session")
+def server():
+    # Runs in a separate thread
+    run_server(server_port=1236)
+    yield
+    shutdown()
+
+
+@route("/success")
+def success(request: HttpRequest) -> HttpResponse:
+    return HttpResponse(
+        body="success"
+    )
+
+
+def test_success(server):
+    response = requests.get("http://localhost:1236/success")
+
+    assert response.content == b"success"
+    assert response.status_code == HTTPStatus.OK
+
+    assert len(response.headers) == 2
+    assert response.headers.get("content-type") == "text/html"
+
+
+@route("/forbidden", method="GET")
+def forbidden(request: HttpRequest) -> HttpResponse:
+    return HttpResponse(
+        body="forbidden",
+        status=HTTPStatus.FORBIDDEN,
+    )
+
+
+def test_forbidden(server):
+    response = requests.get("http://localhost:1236/forbidden")
+
+    assert response.content == b"forbidden"
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+    assert len(response.headers) == 2
+    assert response.headers.get("content-type") == "text/html"
+
+
+@route("/post", method="POST")
+def post(request: HttpRequest) -> HttpResponse:
+    assert request.body == "post data"
+    return HttpResponse(
+        body="post data success",
+        status=HTTPStatus.CREATED
+    )
+
+
+def test_post(server):
+    response = requests.post("http://localhost:1236/post", data="post data")
+
+    assert response.content == b"post data success"
+    assert response.status_code == HTTPStatus.CREATED
+
+    assert len(response.headers) == 2
+    assert response.headers.get("content-type") == "text/html"
+
+
+@route("/query-params", method="GET")
+def query_params(request: HttpRequest) -> HttpResponse:
+    assert request.query_params.get("param1") == "value1,value2"
+    assert request.query_params.get("param2") == "value3"
+
+    return HttpResponse(
+        body="query params query successful",
+        status=HTTPStatus.OK,
+    )
+
+
+def test_query_params(server):
+    response = requests.get("http://localhost:1236/query-params?param1=value1&param1=value2&param2=value3")
+    
+    assert response.content == b"query params query successful"
+    assert response.status_code == HTTPStatus.OK
+
+
+@route("/route-params/{name:str}/{id:int}", method="GET")
+def route_params(request: HttpRequest) -> HttpResponse:
+    assert request.route_params.get("name") == "dirty"
+    assert request.route_params.get("id") == 3
+    
+    return HttpResponse(
+        body="route params success",
+        status=HTTPStatus.OK,
+        content_type="text/plain",
+    )
+
+
+def test_route_params(server):
+    response = requests.get("http://localhost:1236/route-params/dirty/3")
+    
+    assert response is not None
+
+    assert response.content == b"route params success"
+    assert response.status_code == HTTPStatus.OK
+
+
+@route("/headers", method="GET")
+def headers(request: HttpRequest) -> HttpResponse:
+    headers = [
+        Header("A-Header", "here"),
+        Header("Green-eggs-and", "ham"),
+    ]
+    return HttpResponse(
+        body="request with headers success",
+        status=HTTPStatus.OK,
+        headers=headers,
+        content_type="text/plain",
+    )
+
+
+def test_headers(server):
+    response = requests.get("http://localhost:1236/headers")
+    
+    assert response is not None
+
+    assert response.content == b"request with headers success"
+    assert response.status_code == HTTPStatus.OK
+
+    assert len(response.headers) == 4
+    assert response.headers.get("content-type") == "text/plain"
+    assert response.headers.get("content-length") == "28"
+    assert response.headers.get("A-Header") == "here"
+    assert response.headers.get("Green-eggs-and") == "ham"
+
+
+@route("/cookies", method="GET")
+def cookiess(request: HttpRequest) -> HttpResponse:
+    cookies = HTTPCookies.SimpleCookie()
+    cookies["cookie"] = "yummy"
+    cookies["cookie"]["path"] = "overhere"
+    cookies["something"] = "else"
+
+    return HttpResponse(
+        body="cookies request success",
+        status=HTTPStatus.OK,
+        cookies=cookies,
+        content_type="text/plain",
+    )
+
+
+def test_cookiess(server):
+    response = requests.get("http://localhost:1236/cookies")
+    
+    assert response is not None
+
+    assert response.content == b"cookies request success"
+    assert response.status_code == HTTPStatus.OK
+
+    assert len(response.headers) == 3
+
+    assert response.cookies.get("cookie") == "yummy"
+    assert response.cookies.get("cookie", path="overhere") == "yummy"
+
+    assert response.cookies.get("something") == "else"
+
+
+@route("/kitchen-sink/{name:str}/{id:int}", method="GET")
+def kitchen_sink(request: HttpRequest) -> HttpResponse:
+    assert request.query_params.get("param1") == "value1,value2"
+    assert request.query_params.get("param2") == "value3"
+
+    assert request.route_params.get("name") == "dirty"
+    assert request.route_params.get("id") == 3
+    
+    cookies = HTTPCookies.SimpleCookie()
+    cookies["cookie"] = "yummy"
+    cookies["cookie"]["path"] = "overhere"
+    cookies["something"] = "else"
+
+    headers = [
+        Header("A-Header", "here"),
+        Header("Green-eggs-and", "ham"),
+    ]
+    return HttpResponse(
+        body="everything but the kitchen sink",
+        status=HTTPStatus.OK,
+        cookies=cookies,
+        headers=headers,
+        content_type="text/plain",
+    )
+
+
+def test_kitchen_sink(server):
+    response = requests.get("http://localhost:1236/kitchen-sink/dirty/3?param1=value1&param1=value2&param2=value3")
+    
+    assert response is not None
+
+    assert response.content == b"everything but the kitchen sink"
+    assert response.status_code == HTTPStatus.OK
+
+    assert len(response.headers) == 5
+    assert response.headers.get("content-type") == "text/plain"
+    assert response.headers.get("content-length") == "31"
+    assert response.headers.get("A-Header") == "here"
+    assert response.headers.get("Green-eggs-and") == "ham"
+
+    assert response.cookies.get("cookie") == "yummy"
+    assert response.cookies.get("cookie", path="overhere") == "yummy"
+
+    assert response.cookies.get("something") == "else"
+

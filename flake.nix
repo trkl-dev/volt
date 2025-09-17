@@ -49,6 +49,9 @@
         pythonEnv = python.withPackages (ps: [
           ps.pywatchman
           ps.jinja2
+          ps.pytest
+          ps.requests
+
           jinja2-fragments
         ]);
       in {

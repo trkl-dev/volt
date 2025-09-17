@@ -35,18 +35,20 @@ export fn route_params_size(request: *Request) usize {
 }
 
 // Get value by key, returning the length of the value if found, else 0
-export fn route_params_get_value(request: *Request, key: [*:0]const u8, value_out: *RouteParamValue, tag_out: *c_int) usize {
+export fn route_params_get_value(request: *Request, key: [*:0]const u8, int_out: *i32, str_out: *[]const u8, tag_out: *c_int) usize {
     const key_slice = std.mem.span(key);
 
     if (request.route_params.get(key_slice)) |value| {
-        value_out.* = value;
+        // value_out.* = value;
         return switch (value) {
             .int => {
                 tag_out.* = 0;
+                int_out.* = value.int;
                 return 0;
             },
             .str => |s| {
                 tag_out.* = 1;
+                str_out.* = value.str;
                 return s.len;
             },
         };
@@ -59,11 +61,11 @@ export fn route_params_get_keys(request: *Request, keys_array: [*][*:0]const u8,
     var count: usize = 0;
     var iterator = request.route_params.iterator();
 
-    while (iterator.next()) |entry| {
+    while (iterator.next()) |route_param| {
         if (count >= max_keys) break;
         // log.debug("key: {s}", .{entry.value_ptr.*});
-        keys_array[count] = @ptrCast(entry.key_ptr.ptr);
-        key_lengths[count] = entry.key_ptr.len;
+        keys_array[count] = @ptrCast(route_param.key_ptr.ptr);
+        key_lengths[count] = route_param.key_ptr.len;
         count += 1;
     }
 
@@ -121,11 +123,12 @@ pub const Response = struct {
     num_headers: usize,
 };
 
-pub const HandlerFn = *const fn (*Request, *Context) callconv(.c) ?*Response;
+/// **Response is a pointer to a pointer, since the pointer itself is what needs to be changed
+pub const HandlerFn = *const fn (*Request, **Response, *Context) callconv(.c) c_int;
 
 /// Callback function for forcing python to collect garbage.
 pub const GCFn = *const fn () callconv(.c) void;
-
+pub const LogFn = *const fn (message: [*:0]const u8, level: c_int) callconv(.c) void;
 pub const Context = struct {
     allocator: std.mem.Allocator,
 };
@@ -154,7 +157,6 @@ export fn save_response(
         log.err("error copying body: {any}", .{err});
         return 0;
     };
-    std.debug.print("{d}, {d}\n", .{ body.len, std.mem.span(body_volatile).len });
     @memcpy(body, std.mem.span(body_volatile));
     response.body = body;
 
@@ -165,7 +167,6 @@ export fn save_response(
         log.err("error allocating {d} headers: {any}", .{ num_headers, err });
         return 0;
     };
-    std.debug.print("num: {d}\n", .{header_list.len});
 
     for (header_list, 0..) |*header, i| {
         const header_name_volatile = std.mem.span(headers_volatile[i].name);

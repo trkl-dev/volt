@@ -27,6 +27,8 @@ def auth(request: HttpRequest, handler: Handler) -> HttpResponse:
 
 @route("/", method="GET")
 def root(request: HttpRequest) -> HttpResponse:
+    assert False, "this has gone poorly"
+    raise Exception("hi there")
     context = Home.Context(
         request=request,
         selected=NavSelected.HOME,
@@ -52,6 +54,15 @@ def root(request: HttpRequest) -> HttpResponse:
         ]
     )
 
+
+@route("/test/{name:str}/{id:int}", method="GET")
+def test(request: HttpRequest) -> HttpResponse:
+    context = Features.Context(
+        request=request,
+        selected=NavSelected.FEATURES,
+        oob=[NavBar(NavBar.Context(request=request, selected=NavSelected.FEATURES, oob=[]))],
+    )
+    return HttpResponse(Features(context).render(request))
 
 @route("/features", method="GET")
 def features(request: HttpRequest) -> HttpResponse:

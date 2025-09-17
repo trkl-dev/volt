@@ -5,7 +5,9 @@ import platform
 from typing import TYPE_CHECKING, Any
 
 # Better logging of panic errors
-faulthandler.enable()
+faulthandler.enable(
+    all_threads=True
+)
 
 lib = None
 if platform.system() == 'Darwin':
@@ -58,7 +60,7 @@ class RouteParamValue(ctypes.Union):
         ("str", ctypes.c_char_p),
     ]
 
-lib.route_params_get_value.argtypes = [ctypes.POINTER(HttpRequest), ctypes.c_char_p, ctypes.POINTER(RouteParamValue), ctypes.POINTER(ctypes.c_int)]
+lib.route_params_get_value.argtypes = [ctypes.POINTER(HttpRequest), ctypes.c_char_p, ctypes.POINTER(ctypes.c_int32), ctypes.POINTER(ctypes.c_char_p), ctypes.POINTER(ctypes.c_int)]
 lib.route_params_get_value.restype = ctypes.c_size_t
 
 lib.query_params_get_keys.argtypes = [
@@ -89,8 +91,9 @@ lib.save_response.argtypes = [
 lib.save_response.restype = ctypes.c_size_t
 
 
-CALLBACK = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(HttpRequest), ctypes.c_void_p)
-GC_FN = ctypes.CFUNCTYPE(None)
+CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.POINTER(HttpRequest), ctypes.c_void_p, ctypes.c_void_p)
+# GC_FN = ctypes.CFUNCTYPE(None)
+# LOG_FN = ctypes.CFUNCTYPE(None, ctypes.POINTER(ctypes.c_char_p), ctypes.c_int)
 
 class Route(ctypes.Structure):
     _fields_ = [
