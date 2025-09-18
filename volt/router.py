@@ -3,6 +3,7 @@ import gc
 import logging
 import threading
 import signal
+import time
 
 from collections.abc import Callable
 from typing import Any, Literal, Optional, TypedDict, List
@@ -323,16 +324,16 @@ def collect_garbage():
     log.debug("garbage collection complete.")
 
 
-@ctypes.CFUNCTYPE(None, ctypes.c_char_p, ctypes.c_int)
-def log_message(message_ptr: ctypes.c_char_p, level: ctypes.c_int):
-    message = ctypes.string_at(message_ptr).decode('utf-8')
-    match int(level):
+@ctypes.CFUNCTYPE(None, ctypes.POINTER(ctypes.c_char_p), ctypes.c_size_t, ctypes.c_int)
+def log_message(message_ptr: ctypes.c_char_p, message_len: int, level: int):
+    message = ctypes.string_at(message_ptr, message_len).decode('utf-8')
+    match level:
         case 0: zig_logger.debug(message)
         case 1: zig_logger.info(message)
         case 2: zig_logger.warning(message)
         case 3: zig_logger.error(message)
         case _:
-            raise Exception(f"Unexpected level for log_message: {level.value}")
+            raise Exception(f"Unexpected level for log_message: {level}")
 
 
 
@@ -360,6 +361,11 @@ def run_server(server_addr: str = "127.0.0.1", server_port: int = 1234):
     global server_thread
     server_thread = threading.Thread(target=_run_server(server_addr, server_port))
     server_thread.start()
+    # Wait for server to start
+    while not zt.lib.server_running():
+        log.debug("waiting for server to be running...")
+        time.sleep(0.1)
+    log.debug("server running.")
 
 
 def shutdown():

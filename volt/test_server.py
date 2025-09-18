@@ -20,14 +20,14 @@ def server():
 @route("/success")
 def success(request: HttpRequest) -> HttpResponse:
     return HttpResponse(
-        body="success"
+        body="success" * 10_000
     )
 
 
 def test_success(server):
     response = requests.get("http://localhost:1236/success")
 
-    assert response.content == b"success"
+    assert response.content == b"success" * 10_000
     assert response.status_code == HTTPStatus.OK
 
     assert len(response.headers) == 2

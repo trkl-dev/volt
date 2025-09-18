@@ -109,6 +109,9 @@ lib.run_server.restype = None
 lib.shutdown_server.argtypes = []
 lib.shutdown_server.restype = None
 
+lib.server_running.argtypes = []
+lib.server_running.restype = ctypes.c_size_t
+
 
 if TYPE_CHECKING:
     HttpRequestPtr = ctypes._Pointer[HttpRequest]

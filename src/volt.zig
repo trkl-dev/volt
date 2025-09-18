@@ -7,11 +7,21 @@ const Router = @import("router.zig").Router;
 const Route = @import("router.zig").Route;
 const expect = std.testing.expect;
 
-const log = std.log.scoped(.zig);
+const log = std.log.default;
 const test_log = std.log.scoped(.zig_test);
 
 var py_collect_garbage: ?http.GCFn = null;
 var py_log_callback: ?http.LogFn = null;
+
+var server_is_running = false;
+/// For python to confirm that the server has completed startup, and is ready
+/// to accept connections
+pub export fn server_running() usize {
+    if (server_is_running) {
+        return 1;
+    }
+    return 0;
+}
 
 pub export fn run_server(
     server_addr: [*:0]const u8,
@@ -65,7 +75,6 @@ fn runServer(
     // force_nonblocking = true -> server.accept() below is no longer a blocking call and
     // will return errors when there are no connections and would otherwise block
     var server: std.net.Server = undefined;
-
     while (true) {
         server = addr.listen(std.net.Address.ListenOptions{
             // Non-default fields
@@ -92,6 +101,8 @@ fn runServer(
     }
 
     log.info("Running server on {f}", .{server.listen_address});
+
+    server_is_running = true;
 
     var num_iters: u16 = 0;
     // Continue checking for new connections. New connections are given a separate thread to be handled in.
@@ -255,7 +266,9 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
             return;
         };
 
+        log.warn("hey there", .{});
         logging_middleware.after(head.target, status, head.method);
+        log.warn("over here", .{});
     }
 }
 
@@ -464,9 +477,7 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
         try request.respond("", .{ .status = .forbidden });
         return .forbidden;
     }
-    // if (true) {
-    //     @panic("ahhh");
-    // }
+
     // Static file serving
     if (std.mem.startsWith(u8, request.head.target, "/static/")) {
         const status = try handleStaticRoute(allocator, request);
@@ -576,11 +587,6 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
 
     log.debug("route handling complete", .{});
 
-    log.debug("body: {s}", .{response.body});
-    // std.debug.print("body: {s}", .{response.body});
-    log.debug("status: {}", .{response.status});
-    log.debug("len: {d}", .{response.headers.len});
-
     std.debug.assert(response.headers.len > 0);
     try request.respond(response.body, std.http.Server.Request.RespondOptions{
         .status = response.status,
@@ -622,38 +628,115 @@ pub fn pyLogger(
     comptime format: []const u8,
     args: anytype,
 ) void {
-    _ = scope;
-    // std.debug.print("called\n", .{});
-    // Ignore all non-error logging from sources other than
-    // .my_project, .nice_library and the default
-    // const scope_prefix = "(" ++ switch (scope) {
-    //     .my_project, .nice_library, std.log.default_log_scope => @tagName(scope),
-    //     else => if (@intFromEnum(level) <= @intFromEnum(std.log.Level.err))
-    //         @tagName(scope)
-    //     else
-    //         return,
-    // } ++ "): ";
-
-    // const prefix = "[" ++ comptime level.asText() ++ "] " ++ scope_prefix;
-
-    // const level_txt = comptime level.asText();
-    // const prefix = if (scope == .default) ": " else "(" ++ @tagName(scope) ++ "): ";
-    // var buffer: [64]u8 = undefined;
-    // const stderr = std.debug.lockStderrWriter(&buffer);
-    // defer std.debug.unlockStderrWriter();
-    // nosuspend stderr.print(level_txt ++ prefix2 ++ format ++ "\n", args) catch return;
-    // Print the message to stderr, silently ignoring any errors
+    // _ = scope;
     std.debug.assert(py_log_callback != null);
-    const level_int = switch (level) {
-        .debug => 0,
-        .info => 1,
-        .warn => 2,
-        .err => 3,
+
+    var buffer: [100]u8 = undefined;
+    var py_logger = PyLogger.init(level, &buffer);
+
+    switch (scope) {
+        .default => {
+            // omit the scope for the defau
+            py_logger.writer.print(format, args) catch {
+                std.debug.print("Write failed error, log message too long\n", .{});
+            };
+        },
+        else => {
+            py_logger.writer.print("(" ++ @tagName(scope) ++ ") " ++ format, args) catch {
+                std.debug.print("Write failed error, log message too long\n", .{});
+            };
+        },
+    }
+
+    py_logger.writer.flush() catch {
+        std.debug.print("Write failed error, log message too long\n", .{});
     };
-    var log_buffer: [64]u8 = undefined;
-    var writer = std.io.Writer.fixed(log_buffer[0 .. log_buffer.len - 1]);
-    writer.print(format, args) catch return;
-    log_buffer[writer.end] = 0;
-    const message = log_buffer[0..writer.end :0];
-    py_log_callback.?(message, level_int);
 }
+
+const PyLogger = struct {
+    log_level: std.log.Level,
+    writer: std.io.Writer,
+
+    pub fn init(log_level: std.log.Level, buffer: []u8) PyLogger {
+        return .{
+            .log_level = log_level,
+            .writer = std.io.Writer{
+                .buffer = buffer,
+                .vtable = &vtable,
+            },
+        };
+    }
+
+    const vtable: std.io.Writer.VTable = .{
+        .drain = PyLogger.drain,
+    };
+
+    fn pass_to_py_callback(self: *PyLogger, data: []const u8) void {
+        std.debug.assert(py_log_callback != null);
+        const level_int: i8 = switch (self.log_level) {
+            .debug => 0,
+            .info => 1,
+            .warn => 2,
+            .err => 3,
+        };
+        py_log_callback.?(data.ptr, data.len, level_int);
+    }
+
+    // Write the given slice to the buffer. If the buffer is too small for the slice, write to the buffer,
+    // send on to callback, and reset buffer repeatedly until all data has been passed through the buffer.
+    pub fn writeSliceToBuffer(self: *PyLogger, w: *std.io.Writer, slice: []const u8) std.io.Writer.Error!usize {
+        var remaining = slice;
+        var written: usize = 0;
+
+        while (remaining.len > 0) {
+            const available_space = w.buffer.len - w.end;
+            const to_copy = @min(remaining.len, available_space);
+            @memcpy(w.buffer[w.end .. w.end + to_copy], remaining[0..to_copy]);
+            w.end += to_copy;
+            written += to_copy;
+            remaining = remaining[to_copy..];
+
+            if (w.end == self.writer.buffer.len) {
+                self.pass_to_py_callback(w.buffer[0..self.writer.end]);
+                w.end = 0;
+            }
+        }
+
+        return written;
+    }
+
+    // drain performs three main functions:
+    // - empty the buffer of contents, passing on to callback
+    // - move data from given slices into the buffer, passing on to the callback if the data is too large
+    // - splat the last array in the data, 'splat' times, into the buffer
+    pub fn drain(w: *std.io.Writer, data: []const []const u8, splat: usize) std.io.Writer.Error!usize {
+        const self: *PyLogger = @fieldParentPtr("writer", w);
+
+        std.debug.assert(data.len != 0);
+
+        // Handle buffer
+        if (w.end > 0) {
+            // empty the buffer and reset end to 0, to signify buffer can be re-used.
+            self.pass_to_py_callback(w.buffered());
+            w.end = 0;
+        }
+
+        var total_written: usize = 0;
+
+        // Handle data
+        if (data.len >= 2) {
+            for (data[0 .. data.len - 1]) |slice| {
+                total_written += try self.writeSliceToBuffer(w, slice);
+            }
+        }
+
+        // Handle splats
+        if (data[data.len - 1].len > 0) {
+            for (0..splat) |_| {
+                const splat_slice = data[data.len - 1];
+                total_written += try self.writeSliceToBuffer(w, splat_slice);
+            }
+        }
+        return total_written;
+    }
+};

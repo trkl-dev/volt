@@ -128,7 +128,7 @@ pub const HandlerFn = *const fn (*Request, **Response, *Context) callconv(.c) c_
 
 /// Callback function for forcing python to collect garbage.
 pub const GCFn = *const fn () callconv(.c) void;
-pub const LogFn = *const fn (message: [*:0]const u8, level: c_int) callconv(.c) void;
+pub const LogFn = *const fn (message: [*]const u8, message_len: usize, level: c_int) callconv(.c) void;
 pub const Context = struct {
     allocator: std.mem.Allocator,
 };
