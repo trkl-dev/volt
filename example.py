@@ -27,8 +27,6 @@ def auth(request: HttpRequest, handler: Handler) -> HttpResponse:
 
 @route("/", method="GET")
 def root(request: HttpRequest) -> HttpResponse:
-    assert False, "this has gone poorly"
-    raise Exception("hi there")
     context = Home.Context(
         request=request,
         selected=NavSelected.HOME,

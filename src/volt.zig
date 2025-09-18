@@ -13,6 +13,11 @@ const test_log = std.log.scoped(.zig_test);
 var py_collect_garbage: ?http.GCFn = null;
 var py_log_callback: ?http.LogFn = null;
 
+pub const std_options: std.Options = .{
+    .log_level = .debug,
+    .logFn = pyLogger,
+};
+
 var server_is_running = false;
 /// For python to confirm that the server has completed startup, and is ready
 /// to accept connections
@@ -212,6 +217,7 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
     while (true) {
         var request = http_server.receiveHead() catch |err| switch (err) {
             error.HttpConnectionClosing => {
+                log.debug("connection closing...", .{});
                 return;
             },
             // ReadFailed is returned for numerous errors, with the actual error on conn_reader.file_reader.err
@@ -265,10 +271,7 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
             };
             return;
         };
-
-        log.warn("hey there", .{});
         logging_middleware.after(head.target, status, head.method);
-        log.warn("over here", .{});
     }
 }
 
@@ -613,14 +616,6 @@ test shutdown_server {
     shutdown_server();
     try std.testing.expect(should_exit);
 }
-
-pub const std_options: std.Options = .{
-    // Set the log level to info
-    .log_level = .debug,
-
-    // Define logFn to override the std implementation
-    .logFn = pyLogger,
-};
 
 pub fn pyLogger(
     comptime level: std.log.Level,

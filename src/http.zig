@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const log = std.log.scoped(.zig);
+const log = std.log.default;
 
 // Don't love these being in this file
 pub const ParamType = enum {

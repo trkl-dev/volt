@@ -1,7 +1,7 @@
 const http = @import("http.zig");
 const std = @import("std");
 
-const log = std.log.scoped(.zig);
+const log = std.log.default;
 
 pub const Router = struct {
     routes: []Route,
