@@ -1,14 +1,14 @@
+# pyright: basic
 import ctypes
 import gc
 import logging
-import threading
 import signal
+import threading
 import time
-
 from collections.abc import Callable
-from typing import Any, Literal, Optional, TypedDict, List
-
-from http import HTTPStatus, HTTPMethod, cookies as http_cookies
+from http import HTTPMethod, HTTPStatus
+from http import cookies as http_cookies
+from typing import Literal, TypedDict
 
 from . import zig_types as zt
 
@@ -89,15 +89,15 @@ class HttpResponse:
     content_type: str
     status: HTTPStatus
     headers: list[Header]
-    cookies: Optional[http_cookies.SimpleCookie]
+    cookies: http_cookies.SimpleCookie | None
 
     def __init__(
             self,
             body: str = "",
             content_type: str = "text/html",
             status: HTTPStatus= HTTPStatus.OK,
-            headers: Optional[List[Header]] = None,
-            cookies: Optional[http_cookies.SimpleCookie] = None,
+            headers: list[Header] | None = None,
+            cookies: http_cookies.SimpleCookie | None = None,
         ) -> None:
         self.body = body
         self.content_type = content_type
@@ -146,7 +146,7 @@ def create_middleware_stack(handler: Handler, *middlewares: Middleware) -> Handl
     return handler
 
 
-middleware_list: List[Middleware]= []
+middleware_list: list[Middleware]= []
 
 
 def middleware(fn: Callable[[HttpRequest, Handler], HttpResponse]):
@@ -154,30 +154,30 @@ def middleware(fn: Callable[[HttpRequest, Handler], HttpResponse]):
     return None
 
 
-path_list: List[bytes] = []
+path_list: list[bytes] = []
 
 
 RouteRegister = TypedDict('RouteRegister', {'path': bytes, 'method': bytes, 'handler': Callable[[HttpRequest], HttpResponse]})
-routes: List[RouteRegister] = []
+routes: list[RouteRegister] = []
 
 
 def route(path: str, method: str = "GET"):
     """Register a route handler on 'path'"""
-    def decorator(handler_fn: Callable[[HttpRequest], HttpResponse]) -> Any:
+    def decorator(handler_fn: Callable[[HttpRequest], HttpResponse]) -> Callable[[zt.HttpRequestPtr, ctypes.c_void_p, ctypes.c_void_p], ctypes.c_int]:
         def request_handler(request_ptr: zt.HttpRequestPtr, response_ptr: ctypes.c_void_p, context_ptr: ctypes.c_void_p) -> int:
             try:
                 log.debug("starting handler")
                 req = request_ptr.contents
 
                 # QUERY PARAMS HANDLING
-                size = zt.lib.query_params_size(request_ptr)
-                keys_array = (ctypes.c_char_p * size)()
-                key_lengths_array = (ctypes.c_size_t * size)()
+                num_query_params: int = zt.lib.query_params_size(request_ptr)
+                keys_array = (ctypes.c_char_p * num_query_params)()
+                key_lengths_array = (ctypes.c_size_t * num_query_params)()
                 num_keys = zt.lib.query_params_get_keys(
                     request_ptr,
                     keys_array,
                     key_lengths_array,
-                    size
+                    num_query_params
                 )
 
                 query_params = {}
@@ -300,20 +300,16 @@ def route(path: str, method: str = "GET"):
             except Exception as e:
                 log.error(f"Exception occurred: {e}")
                 return 0
-        try:
-            cb = zt.CALLBACK(request_handler)
-            p = path.encode('utf-8')
-            log.info("registering_route: %s", p)
-            path_list.append(p)  # Prevent GC of path
-            routes.append({
-                'path': p,
-                'method': method.encode('utf-8'),
-                'handler': cb,
-            })
-            return cb
-        except Exception as e:
-            log.error("ANOTHER exception occurred")
-            log.error(e)
+        cb = zt.CALLBACK(request_handler)
+        p = path.encode('utf-8')
+        log.info("registering_route: %s", p)
+        path_list.append(p)  # Prevent GC of path
+        routes.append({
+            'path': p,
+            'method': method.encode('utf-8'),
+            'handler': cb,
+        })
+        return cb
     return decorator
 
 
@@ -328,10 +324,14 @@ def collect_garbage():
 def log_message(message_ptr: ctypes.c_char_p, message_len: int, level: int):
     message = ctypes.string_at(message_ptr, message_len).decode('utf-8')
     match level:
-        case 0: zig_logger.debug(message)
-        case 1: zig_logger.info(message)
-        case 2: zig_logger.warning(message)
-        case 3: zig_logger.error(message)
+        case 0: 
+            zig_logger.debug(message)
+        case 1: 
+            zig_logger.info(message)
+        case 2: 
+            zig_logger.warning(message)
+        case 3: 
+            zig_logger.error(message)
         case _:
             raise Exception(f"Unexpected level for log_message: {level}")
 
@@ -378,7 +378,7 @@ def shutdown():
     log.debug("server stopped.")
 
 
-def handle_sigint(signum, frame):
+def handle_sigint(_signum, _frame):
     log.warning("Caught ctrl+c - shutting down Zig server...")
     shutdown()
 

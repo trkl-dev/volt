@@ -17,7 +17,7 @@ def server():
 
 
 @route("/success")
-def success(request: HttpRequest) -> HttpResponse:
+def success(_request: HttpRequest) -> HttpResponse:
     return HttpResponse(
         body="success" * 10_000
     )
@@ -34,7 +34,7 @@ def test_success():
 
 
 @route("/forbidden", method="GET")
-def forbidden(request: HttpRequest) -> HttpResponse:
+def forbidden(_request: HttpRequest) -> HttpResponse:
     return HttpResponse(
         body="forbidden",
         status=HTTPStatus.FORBIDDEN,
@@ -110,7 +110,7 @@ def test_route_params():
 
 
 @route("/headers", method="GET")
-def headers(request: HttpRequest) -> HttpResponse:
+def headers(_request: HttpRequest) -> HttpResponse:
     headers = [
         Header("A-Header", "here"),
         Header("Green-eggs-and", "ham"),
@@ -139,7 +139,7 @@ def test_headers():
 
 
 @route("/cookies", method="GET")
-def cookiess(request: HttpRequest) -> HttpResponse:
+def cookiess(_request: HttpRequest) -> HttpResponse:
     cookies = HTTPCookies.SimpleCookie()
     cookies["cookie"] = "yummy"
     cookies["cookie"]["path"] = "overhere"

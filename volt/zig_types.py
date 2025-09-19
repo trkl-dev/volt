@@ -1,3 +1,4 @@
+# pyright: basic
 import ctypes
 import faulthandler
 
@@ -14,9 +15,6 @@ if platform.system() == 'Darwin':
     lib = ctypes.CDLL('zig-out/lib/libvolt.dylib')
 else:
     lib = ctypes.CDLL('zig-out/lib/libvolt.so')
-
-if lib is None:
-    raise Exception("Failed to load libvolt")
 
 
 class Header(ctypes.Structure):
@@ -92,6 +90,8 @@ lib.save_response.restype = ctypes.c_size_t
 
 
 CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.POINTER(HttpRequest), ctypes.c_void_p, ctypes.c_void_p)
+# FOO = ctypes.POINTER(ctypes.CFUNCTYPE(ctypes.c_int, ctypes.POINTER(HttpRequest), ctypes.c_void_p, ctypes.c_void_p))
+
 
 class Route(ctypes.Structure):
     _fields_ = [
