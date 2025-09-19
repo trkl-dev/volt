@@ -40,6 +40,11 @@ pub export fn run_server(
     py_log_callback = log_callback_func;
     py_collect_garbage = garbage_collection_func;
 
+    defer {
+        should_exit = false;
+        server_is_running = false;
+    }
+
     var gpa = std.heap.DebugAllocator(.{}).init;
     const allocator = gpa.allocator();
 
@@ -57,7 +62,6 @@ pub export fn run_server(
         log.err("error running server: {any}", .{err});
         return;
     };
-    should_exit = false;
 }
 
 /// stop_iter will stop the server after stop_iter iterations, unless stop_iter is 0. This is for testing,
@@ -132,19 +136,16 @@ fn runServer(
         log.debug("Handling new connection", .{});
 
         // Give each new connection a new thread.
-        // TODO: This should probably be a threadpool
-        const thread_result = std.Thread.spawn(
+        // TODO: This should probably be a threadpool, and the closure of threads handled properly
+        _ = std.Thread.spawn(
             .{},
             handleConnection,
             .{ allocator, connection, routes },
-        );
-        log.debug("Thread spawned", .{});
-        if (thread_result) |thread| {
-            thread.detach();
-        } else |err| {
-            log.err("Failed to spawn thread: {any}", .{err});
+        ) catch |err| {
+            log.err("failed to spawn thread: {any}", .{err});
             continue;
-        }
+        };
+        log.debug("Thread spawned", .{});
     }
 
     log.info("Shutting down...", .{});
@@ -602,7 +603,6 @@ var should_exit = false;
 
 export fn shutdown_server() void {
     log.info("shutting down server...", .{});
-    // std.debug.assert(!should_exit);
     should_exit = true;
 }
 
@@ -628,6 +628,13 @@ pub fn pyLogger(
 
     var buffer: [100]u8 = undefined;
     var py_logger = PyLogger.init(level, &buffer);
+
+    // Currently disabling logging when running in pytest. Seems to be race conditions allowing some logs to
+    // get through during test runs when they shouldn't. This github issue seems related:
+    // https://github.com/pytest-dev/pytest/issues/13693
+    if (std.posix.getenv("PYTEST_VERSION") != null) {
+        return;
+    }
 
     switch (scope) {
         .default => {

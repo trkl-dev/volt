@@ -92,8 +92,6 @@ lib.save_response.restype = ctypes.c_size_t
 
 
 CALLBACK = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.POINTER(HttpRequest), ctypes.c_void_p, ctypes.c_void_p)
-# GC_FN = ctypes.CFUNCTYPE(None)
-# LOG_FN = ctypes.CFUNCTYPE(None, ctypes.POINTER(ctypes.c_char_p), ctypes.c_int)
 
 class Route(ctypes.Structure):
     _fields_ = [

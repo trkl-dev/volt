@@ -336,7 +336,6 @@ def log_message(message_ptr: ctypes.c_char_p, message_len: int, level: int):
             raise Exception(f"Unexpected level for log_message: {level}")
 
 
-
 def _run_server(server_addr, server_port):
     # TODO: Check that server_port here is only u16
     def run():
@@ -373,6 +372,10 @@ def shutdown():
     zt.lib.shutdown_server()
     if server_thread is not None:
         server_thread.join()
+    while zt.lib.server_running():
+        log.debug("waiting for server to stop running...")
+        time.sleep(0.1)
+    log.debug("server stopped.")
 
 
 def handle_sigint(signum, frame):

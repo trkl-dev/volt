@@ -5,13 +5,12 @@ from http import HTTPStatus, cookies as HTTPCookies
 from volt.router import Header, HttpRequest, HttpResponse, route, run_server, shutdown
 
 
-import faulthandler
-faulthandler.enable()
-
-
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", autouse=True)
 def server():
-    # Runs in a separate thread
+    """
+    Start the zig webserver in a separate thread and yield. 
+    Teardown will stop the server and wait for the thread to close.
+    """
     run_server(server_port=1236)
     yield
     shutdown()
@@ -24,7 +23,7 @@ def success(request: HttpRequest) -> HttpResponse:
     )
 
 
-def test_success(server):
+def test_success():
     response = requests.get("http://localhost:1236/success")
 
     assert response.content == b"success" * 10_000
@@ -42,7 +41,7 @@ def forbidden(request: HttpRequest) -> HttpResponse:
     )
 
 
-def test_forbidden(server):
+def test_forbidden():
     response = requests.get("http://localhost:1236/forbidden")
 
     assert response.content == b"forbidden"
@@ -61,7 +60,7 @@ def post(request: HttpRequest) -> HttpResponse:
     )
 
 
-def test_post(server):
+def test_post():
     response = requests.post("http://localhost:1236/post", data="post data")
 
     assert response.content == b"post data success"
@@ -82,7 +81,7 @@ def query_params(request: HttpRequest) -> HttpResponse:
     )
 
 
-def test_query_params(server):
+def test_query_params():
     response = requests.get("http://localhost:1236/query-params?param1=value1&param1=value2&param2=value3")
     
     assert response.content == b"query params query successful"
@@ -101,7 +100,7 @@ def route_params(request: HttpRequest) -> HttpResponse:
     )
 
 
-def test_route_params(server):
+def test_route_params():
     response = requests.get("http://localhost:1236/route-params/dirty/3")
     
     assert response is not None
@@ -124,7 +123,7 @@ def headers(request: HttpRequest) -> HttpResponse:
     )
 
 
-def test_headers(server):
+def test_headers():
     response = requests.get("http://localhost:1236/headers")
     
     assert response is not None
@@ -154,7 +153,7 @@ def cookiess(request: HttpRequest) -> HttpResponse:
     )
 
 
-def test_cookiess(server):
+def test_cookiess():
     response = requests.get("http://localhost:1236/cookies")
     
     assert response is not None
@@ -196,7 +195,7 @@ def kitchen_sink(request: HttpRequest) -> HttpResponse:
     )
 
 
-def test_kitchen_sink(server):
+def test_kitchen_sink():
     response = requests.get("http://localhost:1236/kitchen-sink/dirty/3?param1=value1&param1=value2&param2=value3")
     
     assert response is not None
