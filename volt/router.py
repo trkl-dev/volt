@@ -8,7 +8,7 @@ import time
 from collections.abc import Callable
 from http import HTTPMethod, HTTPStatus
 from http import cookies as http_cookies
-from typing import Literal, TypedDict
+from typing import Literal, TypedDict, override
 
 from . import zig_types as zt
 
@@ -51,6 +51,11 @@ class Header:
 
             raise Exception(rf"Header name is invalid. Invalid char: {char}. Valid characters are: a-z, A-Z, 0-9, _ :;.,\/\"'?!(){{}}[]@<>=-+*#$&`|~^%")
 
+    @override
+    def __repr__(self) -> str:
+        return f"Header<{self.name}: {self.value}>"
+
+
 
 class HttpRequest:
     method: HTTPMethod
@@ -58,6 +63,7 @@ class HttpRequest:
     body: str
     body_len: int
     headers: list[Header]
+    cookies: http_cookies.SimpleCookie
     query_params: dict[str, str]
     route_params: dict[str, str|int]
     hx_request: bool
@@ -70,6 +76,7 @@ class HttpRequest:
             body: str,
             body_len: int,
             headers: list[Header],
+            cookies: http_cookies.SimpleCookie,
             query_params: dict[str, str],
             route_params: dict[str, str|int],
         ) -> None:
@@ -78,6 +85,7 @@ class HttpRequest:
         self.body = body
         self.body_len = body_len
         self.headers = headers
+        self.cookies = cookies 
         self.query_params = query_params
         self.route_params = route_params
         self.hx_request = False
@@ -232,12 +240,17 @@ def route(path: str, method: str = "GET"):
                         str_bytes = ctypes.string_at(str_out.value, size)
                         route_params[key] = str_bytes.decode('utf-8')
 
-                request_headers = []
+                request_headers: list[Header] = []
                 for i in range(req.num_headers):
                     request_headers.append(Header(
                         req.headers[i].name.decode('utf-8'),
                         req.headers[i].value.decode('utf-8'),
                     ))
+
+                request_cookies = http_cookies.SimpleCookie()
+                for header in request_headers:
+                    if header.name == 'Cookie':
+                        request_cookies.load(header.value)
 
                 request_object = HttpRequest(
                     method=ctypes.string_at(req.method).decode('utf-8'),
@@ -245,6 +258,7 @@ def route(path: str, method: str = "GET"):
                     body=ctypes.string_at(req.body, req.body_len).decode('utf-8'),
                     body_len=req.body_len,
                     headers=request_headers,
+                    cookies=request_cookies,
                     query_params=query_params,
                     route_params=route_params,
                 )

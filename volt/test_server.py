@@ -2,6 +2,8 @@ import pytest
 import requests
 
 from http import HTTPStatus, cookies as HTTPCookies
+
+from requests.cookies import cookiejar_from_dict
 from volt.router import Header, HttpRequest, HttpResponse, route, run_server, shutdown
 
 
@@ -139,11 +141,13 @@ def test_headers():
 
 
 @route("/cookies", method="GET")
-def cookiess(_request: HttpRequest) -> HttpResponse:
+def cookies(_request: HttpRequest) -> HttpResponse:
     cookies = HTTPCookies.SimpleCookie()
     cookies["cookie"] = "yummy"
-    cookies["cookie"]["path"] = "overhere"
+    cookies["cookie"]["path"] = "/expect-cookies"
     cookies["something"] = "else"
+    cookies["another"] = "cookie"
+    cookies["another"]["path"] = "elsewhere"
 
     return HttpResponse(
         body="cookies request success",
@@ -153,20 +157,48 @@ def cookiess(_request: HttpRequest) -> HttpResponse:
     )
 
 
-def test_cookiess():
-    response = requests.get("http://localhost:1236/cookies")
-    
-    assert response is not None
+@route("/expect-cookies", method="GET")
+def expect_cookies(request: HttpRequest) -> HttpResponse:
+    assert len(request.cookies.items()) == 2
 
-    assert response.content == b"cookies request success"
+    cookie_cookie = request.cookies.get("cookie")
+    assert cookie_cookie is not None
+    assert cookie_cookie.value == "yummy"
+
+    something_cookie = request.cookies.get("something")
+    assert something_cookie is not None
+    assert something_cookie.value == "else"
+
+    another_cookie = request.cookies.get("another")
+    assert another_cookie is None
+
+    return HttpResponse(
+        body="cookies request success",
+        status=HTTPStatus.OK,
+        content_type="text/plain",
+    )
+
+
+def test_cookies():
+    session = requests.Session()
+
+    # Initial request to set cookies
+    response = session.get("http://localhost:1236/cookies")
     assert response.status_code == HTTPStatus.OK
+    
+    assert response.content == b"cookies request success"
 
     assert len(response.headers) == 3
 
     assert response.cookies.get("cookie") == "yummy"
-    assert response.cookies.get("cookie", path="overhere") == "yummy"
+    assert response.cookies.get("cookie", path="/expect-cookies") == "yummy"
 
     assert response.cookies.get("something") == "else"
+
+    # Ensure that cookies are persisted in the session and are passed through subsequent requests
+    # correctly
+    response_expect_cookies = session.get("http://localhost:1236/expect-cookies")
+    assert response_expect_cookies.status_code == 200
 
 
 @route("/kitchen-sink/{name:str}/{id:int}", method="GET")
