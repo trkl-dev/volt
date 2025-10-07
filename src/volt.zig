@@ -262,7 +262,7 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
             }
             // Using the state of .received_head to check whether the request has already been responded to
             if (request.server.reader.state != .received_head) {
-                log.debug("not in .received_head state, no need to create response", .{});
+                log.debug("not in .received_head state (state: {any}), no need to create response", .{request.server.reader.state});
                 return;
             }
             log.err("request not already responded to, responding with 500", .{});
@@ -626,13 +626,14 @@ pub fn pyLogger(
     // _ = scope;
     std.debug.assert(py_log_callback != null);
 
-    var buffer: [100]u8 = undefined;
+    var buffer: [200]u8 = undefined;
     var py_logger = PyLogger.init(level, &buffer);
 
     // Currently disabling logging when running in pytest. Seems to be race conditions allowing some logs to
     // get through during test runs when they shouldn't. This github issue seems related:
     // https://github.com/pytest-dev/pytest/issues/13693
-    if (std.posix.getenv("PYTEST_VERSION") != null) {
+
+    if (std.posix.getenv("NO_LOGS") != null) {
         return;
     }
 
