@@ -9,6 +9,7 @@ from collections.abc import Callable
 from http import HTTPMethod, HTTPStatus
 from http import cookies as http_cookies
 from typing import Literal, TypedDict, override
+from urllib.parse import parse_qs
 
 from . import zig_types as zt
 
@@ -56,18 +57,20 @@ class Header:
         return f"Header<{self.name}: {self.value}>"
 
 
+type FormData = dict[str, list[str]]
 
 class HttpRequest:
     method: HTTPMethod
     path: str
     body: str
     body_len: int
+    form_data: FormData 
     headers: list[Header]
     cookies: http_cookies.SimpleCookie
     query_params: dict[str, str]
     route_params: dict[str, str|int]
     hx_request: bool
-    hx_fragment: str
+    hx_fragment: str | None
 
     def __init__(
             self,
@@ -75,6 +78,7 @@ class HttpRequest:
             path: str,
             body: str,
             body_len: int,
+            form_data: FormData,
             headers: list[Header],
             cookies: http_cookies.SimpleCookie,
             query_params: dict[str, str],
@@ -84,12 +88,13 @@ class HttpRequest:
         self.path = path
         self.body = body
         self.body_len = body_len
+        self.form_data = form_data
         self.headers = headers
         self.cookies = cookies 
         self.query_params = query_params
         self.route_params = route_params
         self.hx_request = False
-        self.hx_fragment = "content"
+        self.hx_fragment = None
 
 
 class HttpResponse:
@@ -196,8 +201,9 @@ def route(path: str, method: str = "GET"):
 
                         value_out = ctypes.c_char_p()
                         size = zt.lib.query_params_get_value(request_ptr, key_bytes, ctypes.byref(value_out))
-                        if size == 0:
-                            raise Exception(f"Somehow we have a key: {key}, that can not be found")
+                        # An empty value is actually valid I think. I.e. /search?query= would be size 0, but valid
+                        # if size == 0:
+                        #     raise Exception(f"Somehow we have a key: {key}, that can not be found")
                         value_bytes = ctypes.string_at(value_out, size)
                         value = value_bytes.decode('utf-8')
 
@@ -247,16 +253,24 @@ def route(path: str, method: str = "GET"):
                         req.headers[i].value.decode('utf-8'),
                     ))
 
+                request_body = ctypes.string_at(req.body, req.body_len).decode('utf-8')
+                log.debug(f"request body: {request_body}")
+
                 request_cookies = http_cookies.SimpleCookie()
+                form_data: dict[str, list[str]] = {}
                 for header in request_headers:
                     if header.name == 'Cookie':
                         request_cookies.load(header.value)
+                    if header.name == 'Content-Type' and header.value == "application/x-www-form-urlencoded":
+                        form_data = parse_qs(request_body)
+
 
                 request_object = HttpRequest(
                     method=ctypes.string_at(req.method).decode('utf-8'),
                     path=ctypes.string_at(req.path).decode('utf-8'),
-                    body=ctypes.string_at(req.body, req.body_len).decode('utf-8'),
+                    body=request_body,
                     body_len=req.body_len,
+                    form_data=form_data,
                     headers=request_headers,
                     cookies=request_cookies,
                     query_params=query_params,
@@ -327,14 +341,14 @@ def route(path: str, method: str = "GET"):
     return decorator
 
 
-@ctypes.CFUNCTYPE(None)
+@ctypes.PYFUNCTYPE(None)
 def collect_garbage():
     log.debug("running garbage collection...")
     gc.collect()
     log.debug("garbage collection complete.")
 
 
-@ctypes.CFUNCTYPE(None, ctypes.POINTER(ctypes.c_char_p), ctypes.c_size_t, ctypes.c_int)
+@ctypes.PYFUNCTYPE(None, ctypes.POINTER(ctypes.c_char_p), ctypes.c_size_t, ctypes.c_int)
 def log_message(message_ptr: ctypes.c_char_p, message_len: int, level: int):
     message = ctypes.string_at(message_ptr, message_len).decode('utf-8')
     match level:
@@ -385,7 +399,7 @@ def shutdown():
     global server_thread
     zt.lib.shutdown_server()
     if server_thread is not None:
-        server_thread.join()
+        server_thread.join(timeout=3)
     while zt.lib.server_running():
         log.debug("waiting for server to stop running...")
         time.sleep(0.1)

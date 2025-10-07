@@ -1,7 +1,6 @@
 all: watch
 
 build: 
-	zig build -Doptimize=Debug -freference-trace
 
 run:
 	-pkill -TERM -f "python example.py" && sleep 2 || pkill -KILL -f "python example.py"
@@ -16,7 +15,7 @@ debug-test:
 	lldb pytest
 
 test: build
-	pytest
+	NO_LOGS="true" pytest
 
 test-verbose: build
 	pytest -svv

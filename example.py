@@ -1,19 +1,23 @@
-import threading
 import time
-from http import HTTPStatus, cookies as HTTPCookies
+import logging
+from http import HTTPStatus
 
-from volt.router import Handler, Header, HttpRequest, HttpResponse, Redirect, route, middleware, run_server
+from volt.router import Handler, HttpRequest, HttpResponse, Redirect, route, middleware, run_server
 
-from components import Home, Features, NavSelected, NavBar
+from components_gen import Features, Home, BaseNavbar, Demo, DemoTaskList, DemoProgrammingLanguageList, DemoCounter
+from custom_types import NavSelected, DemoProgrammingLanguage
 
+
+mw_log = logging.getLogger('volt.middleware.py')
+log = logging.getLogger('volt.py')
 
 
 @middleware
-def logging(request: HttpRequest, handler: Handler) -> HttpResponse:
+def logging_middleware(request: HttpRequest, handler: Handler) -> HttpResponse:
     start = time.time()
     response = handler(request)
     end = time.time() - start
-    print(f"Request - Path: {request.path}, Time: {end * 1_000 * 1_000 }μs")
+    mw_log.info(f"Request - Path: {request.path}, Time: {end * 1_000 * 1_000 }μs")
     return response
 
 
@@ -30,46 +34,150 @@ def root(request: HttpRequest) -> HttpResponse:
     context = Home.Context(
         request=request,
         selected=NavSelected.HOME,
-        oob=[NavBar(NavBar.Context(request=request, selected=NavSelected.HOME, oob=[]))],
+        oob=[BaseNavbar(BaseNavbar.Context(request=request, selected=NavSelected.HOME, oob=[]))],
     )
-
-    cookies = HTTPCookies.SimpleCookie()
-    cookies["this"] = "that"
-    cookies["this"]["path"] = "other"
-    cookies["something"] = "else"
     return HttpResponse(
         Home(context).render(request),
-        cookies=cookies,
-        headers=[
-            Header("custom-header-1", "a value"),
-            Header("custom-header-2", "another value"),
-            Header("custom-header-a", "a value"),
-            Header("custom-header-b", "a value"),
-            Header("custom-header-c", "a value"),
-            Header("custom-header-d", "another value"),
-            Header("custom-header-e", "another value"),
-            Header("custom-header-r", "another value"),
-        ]
     )
 
-
-@route("/test/{name:str}/{id:int}", method="GET")
-def test(request: HttpRequest) -> HttpResponse:
-    context = Features.Context(
-        request=request,
-        selected=NavSelected.FEATURES,
-        oob=[NavBar(NavBar.Context(request=request, selected=NavSelected.FEATURES, oob=[]))],
-    )
-    return HttpResponse(Features(context).render(request))
 
 @route("/features", method="GET")
 def features(request: HttpRequest) -> HttpResponse:
     context = Features.Context(
         request=request,
         selected=NavSelected.FEATURES,
-        oob=[NavBar(NavBar.Context(request=request, selected=NavSelected.FEATURES, oob=[]))],
+        oob=[BaseNavbar(BaseNavbar.Context(request=request, selected=NavSelected.FEATURES, oob=[]))],
     )
     return HttpResponse(Features(context).render(request))
+
+
+PROGRAMMING_LANGUAGES: list[DemoProgrammingLanguage] = [
+    DemoProgrammingLanguage("Python", "Py", "High-level programming language", "Popular", "text-volt-yellow", "bg-volt-yellow/20"),
+    DemoProgrammingLanguage("JavaScript", "JS", "Dynamic web programming language", "Web", "text-blue-400", "bg-blue-400/20"),
+    DemoProgrammingLanguage("TypeScript", "TS", "Typed superset of JavaScript", "Web", "text-blue-500", "bg-blue-500/20"),
+    DemoProgrammingLanguage("Rust", "Rs", "Systems programming language", "Systems", "text-orange-400", "bg-orange-400/20"),
+    DemoProgrammingLanguage("Go", "Go", "Google's systems language", "Systems", "text-cyan-400", "bg-cyan-400/20"),
+    DemoProgrammingLanguage("Java", "Jv", "Enterprise programming language", "Enterprise", "text-red-400", "bg-red-400/20"),
+    DemoProgrammingLanguage("C++", "C+", "Low-level systems language", "Systems", "text-purple-400", "bg-purple-400/20"),
+    DemoProgrammingLanguage("C#", "C#", "Microsoft's .NET language", "Enterprise", "text-green-400", "bg-green-400/20"),
+    DemoProgrammingLanguage("Zig", "Zg", "Modern systems programming", "Systems", "text-volt-yellow", "bg-volt-yellow/20"),
+    DemoProgrammingLanguage("Swift", "Sw", "Apple's iOS development language", "Mobile", "text-orange-500", "bg-orange-500/20"),
+    DemoProgrammingLanguage("Kotlin", "Kt", "Modern Android development", "Mobile", "text-purple-500", "bg-purple-500/20"),
+    DemoProgrammingLanguage("Ruby", "Rb", "Developer-friendly scripting", "Web", "text-red-500", "bg-red-500/20"),
+    DemoProgrammingLanguage("PHP", "Php", "Server-side web language", "Web", "text-indigo-400", "bg-indigo-400/20"),
+    DemoProgrammingLanguage("Dart", "Dt", "Google's Flutter language", "Mobile", "text-blue-600", "bg-blue-600/20"),
+    DemoProgrammingLanguage("Elixir", "Ex", "Functional concurrent language", "Functional", "text-purple-600", "bg-purple-600/20"),
+    DemoProgrammingLanguage("Haskell", "Hs", "Pure functional language", "Functional", "text-green-500", "bg-green-500/20"),
+    DemoProgrammingLanguage("Clojure", "Cl", "Modern Lisp for JVM", "Functional", "text-cyan-500", "bg-cyan-500/20"),
+    DemoProgrammingLanguage("Scala", "Sc", "Functional + OOP on JVM", "Enterprise", "text-red-600", "bg-red-600/20"),
+    DemoProgrammingLanguage("R", "R", "Statistical computing language", "Data", "text-blue-700", "bg-blue-700/20"),
+    DemoProgrammingLanguage("Julia", "Jl", "High-performance scientific computing", "Data", "text-purple-700", "bg-purple-700/20"),
+]
+
+
+@route("/demo", method="GET")
+def demo(request: HttpRequest) -> HttpResponse:
+    tasks = [
+        "Learn about Volt framework",
+        "Try HTMX integration",
+        "Add a new task!",
+    ]
+
+    context = Demo.Context(
+        request=request,
+        selected=NavSelected.DEMO,
+        tasks=tasks,
+        searching=False,
+        programming_languages=[],
+        value=0,
+        chat_messages=["something"],
+        oob=[BaseNavbar(BaseNavbar.Context(request=request, selected=NavSelected.DEMO, oob=[]))],
+    )
+
+    return HttpResponse(Demo(context).render(request))
+
+
+@route("/demo/counter/{direction:str}", method="POST")
+def demo_counter(request: HttpRequest) -> HttpResponse:
+    value = request.form_data.get("value", [])
+
+    if len(value) == 0:
+        log.warning("given value is empty")
+        return HttpResponse(status=HTTPStatus.BAD_REQUEST)
+
+    try:
+        int_value = int(value[0])
+    except Exception as e:
+        log.warning(f"error converting value to integer: {e}")
+        return HttpResponse(status=HTTPStatus.BAD_REQUEST)
+
+    match request.route_params.get("direction"):
+        case "increment":
+            int_value += 1
+        case "decrement":
+            int_value -= 1
+        case "reset":
+            int_value = 0
+        case _:
+            return HttpResponse(status=HTTPStatus.NOT_FOUND)
+
+    context = DemoCounter.Context(
+        request=request,
+        value=int_value,
+        oob=[],
+    )
+
+    return HttpResponse(DemoCounter(context).render(request))
+
+
+@route("/demo/languages/search", method="GET")
+def demo_languages_search(request: HttpRequest) -> HttpResponse:
+    query = request.query_params.get("query")
+    if query is None or query == "":
+        context = DemoProgrammingLanguageList.Context(
+            request=request,
+            programming_languages=[],
+            searching=False,
+            oob=[],
+        )
+        return HttpResponse(DemoProgrammingLanguageList(context).render(request))
+
+    results: list[DemoProgrammingLanguage] = []
+    for language in PROGRAMMING_LANGUAGES:
+        if query.lower() in language.name.lower():
+            results.append(language)
+
+        # Just take top 5 results
+        if len(results) >= 3:
+            break
+
+    context = DemoProgrammingLanguageList.Context(
+        request=request,
+        programming_languages=results,
+        searching=True,
+        oob=[],
+    )
+
+    return HttpResponse(DemoProgrammingLanguageList(context).render(request))
+
+
+@route("/demo/add-task", method="POST")
+def demo_add_task(request: HttpRequest) -> HttpResponse:
+    task = request.form_data.get("task")
+    if task is None:
+        return HttpResponse(status=HTTPStatus.BAD_REQUEST)
+        
+    context = DemoTaskList.Context(
+        request=request,
+        tasks=task,  # takes a list
+        oob=[],
+    )
+    return HttpResponse(DemoTaskList(context).render(request))
+
+
+@route("/demo/task/delete", method="DELETE")
+def demo_delete_task(_request: HttpRequest) -> HttpResponse:
+    return HttpResponse(status=HTTPStatus.OK)
 
 
 @route("/quickstart", method="GET")
@@ -82,86 +190,5 @@ def home(_: HttpRequest) -> HttpResponse:
     return Redirect("/")
 
 
-@route("/blog/{id:int}")
-def blog(request: HttpRequest) -> HttpResponse:
-    print(request.route_params)
-    return HttpResponse(f"this is the blog page by id\n{request.route_params}\n{request.query_params}")
-
-
-@route("/blog/name/{name:str}")
-def blog_name(request: HttpRequest) -> HttpResponse:
-    print("inside /blog/name/{name:str} route")
-    print(request.route_params)
-    return HttpResponse("this is the blog by name")
-
-
-@route("/content", method="POST")
-def content(request: HttpRequest) -> HttpResponse:
-    return HttpResponse(f"this is the content page. Content: {request.body=}")
-
-
-@route("/slow")
-def slow(_: HttpRequest) -> HttpResponse:
-    time.sleep(10)
-    return HttpResponse(f"this is the slow page")
-
-
-@route("/cpu-heavy")
-def cpu_heavy_handler(request: HttpRequest) -> HttpResponse:
-    """CPU-intensive handler that will hold the GIL"""
-    thread_id = threading.get_ident()
-    start_time = time.time()
-    
-    # Pure CPU work - no I/O, will hold GIL the entire time
-    result = 0
-    for i in range(10_000_000):  # 10 million iterations
-        result += i * i
-        if i % 1_000_000 == 0:
-            # This won't help with GIL, but shows progress
-            elapsed = time.time() - start_time
-            print(f"Thread {thread_id}: Progress {i//1_000_000}/10, elapsed: {elapsed:.2f}s")
-    
-    total_time = time.time() - start_time
-    body =  f"CPU work complete! Thread: {thread_id}, Result: {result}, Time: {total_time:.2f}s"
-    content_type = "text/plain"
-    name = "X-Thread-ID"
-    headers = [Header(name=name, value=str(thread_id)), Header(name="something", value="else")]
-    return HttpResponse(
-        body,
-        content_type=content_type,
-        headers=headers,
-    )
-
-@route("/mixed-work") 
-def mixed_work_handler(request: HttpRequest) -> HttpResponse:
-    """Mixed CPU + I/O handler - shows when GIL gets released"""
-    thread_id = threading.get_ident()
-    start_time = time.time()
-    
-    print(f"Thread {thread_id}: Starting mixed work")
-    
-    # CPU work (holds GIL)
-    result = 0
-    for i in range(3_000_000):  # 3 million iterations
-        result += i * i
-    
-    cpu_time = time.time() - start_time
-    print(f"Thread {thread_id}: CPU work done in {cpu_time:.2f}s")
-    
-    # I/O work (releases GIL during the sleep)
-    time.sleep(2.0)  # This will release the GIL!
-    
-    # More CPU work (re-acquires and holds GIL)
-    for i in range(2_000_000):  # 2 million more
-        result += i * i
-    
-    total_time = time.time() - start_time
-    return HttpResponse(
-        f"Mixed work complete! Thread: {thread_id}, Result: {result}, Total time: {total_time:.2f}s",
-        headers=[{"name": "X-Thread-ID", "value": str(thread_id)}]
-    )
-
 if __name__ == "__main__":
-    # gc.set_debug(gc.DEBUG_LEAK)
-    # gc.disable()
     run_server()

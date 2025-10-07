@@ -1,9 +1,9 @@
 import pytest
 import requests
 
-from http import HTTPStatus, cookies as HTTPCookies
+from http import HTTPStatus
+from http import cookies as HTTPCookies
 
-from requests.cookies import cookiejar_from_dict
 from volt.router import Header, HttpRequest, HttpResponse, route, run_server, shutdown
 
 
@@ -55,7 +55,7 @@ def test_forbidden():
 
 @route("/post", method="POST")
 def post(request: HttpRequest) -> HttpResponse:
-    assert request.body == "post data"
+    assert request.form_data.get("foo") == ["bar"]
     return HttpResponse(
         body="post data success",
         status=HTTPStatus.CREATED
@@ -63,7 +63,7 @@ def post(request: HttpRequest) -> HttpResponse:
 
 
 def test_post():
-    response = requests.post("http://localhost:1236/post", data="post data")
+    response = requests.post("http://localhost:1236/post", data={"foo": "bar", "something": {"else": "here"}}, timeout=10)
 
     assert response.content == b"post data success"
     assert response.status_code == HTTPStatus.CREATED
