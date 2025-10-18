@@ -3,14 +3,37 @@ import time
 import logging
 from http import HTTPStatus
 
-from volt.router import Handler, HttpRequest, HttpResponse, Redirect, route, middleware, run_server
+from volt.router import (
+    Handler,
+    HttpRequest,
+    HttpResponse,
+    Redirect,
+    route,
+    middleware,
+    run_server,
+)
 
-from components_gen import DemoChatMessages, Features, Home, BaseNavbar, Demo, DemoTaskList, DemoProgrammingLanguageList, DemoCounter
-from custom_types import DemoChatMessagesTypes, Message, NavSelected, DemoProgrammingLanguage, Sender
+from components_gen import (
+    DemoChatMessages,
+    Features,
+    Home,
+    BaseNavbar,
+    Demo,
+    DemoTaskList,
+    DemoProgrammingLanguageList,
+    DemoCounter,
+)
+from custom_types import (
+    DemoChatMessagesTypes,
+    Message,
+    NavSelected,
+    DemoProgrammingLanguage,
+    Sender,
+)
 
 
-mw_log = logging.getLogger('volt.middleware.py')
-log = logging.getLogger('volt.py')
+mw_log = logging.getLogger("volt.middleware.py")
+log = logging.getLogger("volt.py")
 
 
 @middleware
@@ -18,7 +41,7 @@ def logging_middleware(request: HttpRequest, handler: Handler) -> HttpResponse:
     start = time.time()
     response = handler(request)
     end = time.time() - start
-    mw_log.info(f"Request - Path: {request.path}, Time: {end * 1_000 * 1_000 }μs")
+    mw_log.info(f"Request - Path: {request.path}, Time: {end * 1_000 * 1_000}μs")
     return response
 
 
@@ -35,7 +58,11 @@ def root(request: HttpRequest) -> HttpResponse:
     context = Home.Context(
         request=request,
         selected=NavSelected.HOME,
-        oob=[BaseNavbar(BaseNavbar.Context(request=request, selected=NavSelected.HOME, oob=[]))],
+        oob=[
+            BaseNavbar(
+                BaseNavbar.Context(request=request, selected=NavSelected.HOME, oob=[])
+            )
+        ],
     )
     return HttpResponse(
         Home(context).render(request),
@@ -47,11 +74,18 @@ def features(request: HttpRequest) -> HttpResponse:
     context = Features.Context(
         request=request,
         selected=NavSelected.FEATURES,
-        oob=[BaseNavbar(BaseNavbar.Context(request=request, selected=NavSelected.FEATURES, oob=[]))],
+        oob=[
+            BaseNavbar(
+                BaseNavbar.Context(
+                    request=request, selected=NavSelected.FEATURES, oob=[]
+                )
+            )
+        ],
     )
     return HttpResponse(Features(context).render(request))
 
 
+# fmt: off
 PROGRAMMING_LANGUAGES: list[DemoProgrammingLanguage] = [
     DemoProgrammingLanguage("Python", "Py", "High-level programming language", "Popular", "text-volt-yellow", "bg-volt-yellow/20"),
     DemoProgrammingLanguage("JavaScript", "JS", "Dynamic web programming language", "Web", "text-blue-400", "bg-blue-400/20"),
@@ -74,6 +108,7 @@ PROGRAMMING_LANGUAGES: list[DemoProgrammingLanguage] = [
     DemoProgrammingLanguage("R", "R", "Statistical computing language", "Data", "text-blue-700", "bg-blue-700/20"),
     DemoProgrammingLanguage("Julia", "Jl", "High-performance scientific computing", "Data", "text-purple-700", "bg-purple-700/20"),
 ]
+# fmt: on
 
 
 @route("/demo/counter/{direction:str}", method="POST")
@@ -145,7 +180,7 @@ def demo_add_task(request: HttpRequest) -> HttpResponse:
     task = request.form_data.get("task")
     if task is None:
         return HttpResponse(status=HTTPStatus.BAD_REQUEST)
-        
+
     context = DemoTaskList.Context(
         request=request,
         tasks=task,  # takes a list
@@ -159,7 +194,7 @@ def demo_delete_task(_request: HttpRequest) -> HttpResponse:
     return HttpResponse(status=HTTPStatus.OK)
 
 
-CHAT_MESSAGES : DemoChatMessagesTypes.chat_messages = [
+CHAT_MESSAGES: DemoChatMessagesTypes.chat_messages = [
     {
         "message": "This is amazing!",
         "sender": Sender.ME,
@@ -177,6 +212,7 @@ CHAT_MESSAGES : DemoChatMessagesTypes.chat_messages = [
     },
 ]
 
+
 @route("/demo/chat", method="POST")
 def demo_add_chat(request: HttpRequest) -> HttpResponse:
     chat = request.form_data.get("message", [])
@@ -184,12 +220,14 @@ def demo_add_chat(request: HttpRequest) -> HttpResponse:
         log.warning(f"unexpected chat length: {len(chat)}")
         return HttpResponse(status=HTTPStatus.BAD_REQUEST)
 
-    messages: list[Message] = [{
-        "message": chat[0],
-        "sender": Sender.ME,
-        "time": datetime.now(),
-    }]
-        
+    messages: list[Message] = [
+        {
+            "message": chat[0],
+            "sender": Sender.ME,
+            "time": datetime.now(),
+        }
+    ]
+
     context = DemoChatMessages.Context(
         request=request,
         chat_messages=messages,
@@ -205,7 +243,7 @@ def demo(request: HttpRequest) -> HttpResponse:
         "Try HTMX integration",
         "Add a new task!",
     ]
-    
+
     context = Demo.Context(
         request=request,
         selected=NavSelected.DEMO,
@@ -214,7 +252,11 @@ def demo(request: HttpRequest) -> HttpResponse:
         programming_languages=[],
         value=0,
         chat_messages=CHAT_MESSAGES,
-        oob=[BaseNavbar(BaseNavbar.Context(request=request, selected=NavSelected.DEMO, oob=[]))],
+        oob=[
+            BaseNavbar(
+                BaseNavbar.Context(request=request, selected=NavSelected.DEMO, oob=[])
+            )
+        ],
     )
 
     return HttpResponse(Demo(context).render(request))
