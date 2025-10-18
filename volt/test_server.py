@@ -246,3 +246,24 @@ def test_kitchen_sink():
 
     assert response.cookies.get("something") == "else"
 
+
+@route("/nested/second")
+def nested_2(_request: HttpRequest) -> HttpResponse:
+    return HttpResponse(
+        body="second nested"
+    )
+
+
+@route("/nested")
+def nested_1(_request: HttpRequest) -> HttpResponse:
+    return HttpResponse(
+        body="first nested"
+    )
+
+# NOTE:: This tests a regression
+def test_out_of_order():
+    response = requests.get("http://localhost:1236/nested")
+
+    assert response.content == b"first nested"
+    assert response.status_code == HTTPStatus.OK
+

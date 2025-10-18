@@ -1,6 +1,8 @@
 # pyright: basic
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
+from typing import TypedDict
 
 
 class NavSelected(StrEnum):
@@ -13,14 +15,6 @@ class NavSelected(StrEnum):
 
 class BaseNavbarTypes:
     selected = NavSelected
-
-
-class DemoContentTypes:
-    searching = bool
-    programming_languages = list[str]
-    tasks = list[str]
-    value = int
-    chat_messages = list[str]
 
 
 @dataclass
@@ -46,5 +40,21 @@ class DemoCounterTypes:
     value = int
 
 
+class Sender(StrEnum):
+    ME = "me"
+    THEM = "them"
+
+
+Message = TypedDict("Message", {"message": str, "sender": Sender, "time": datetime})
+
+
 class DemoChatMessagesTypes:
-    chat_messages = list[str]
+    chat_messages = list[Message]
+
+
+class DemoContentTypes:
+    searching = DemoProgrammingLanguageListTypes.searching
+    programming_languages = DemoProgrammingLanguageListTypes.programming_languages
+    tasks = DemoTaskListTypes.tasks
+    value = DemoCounterTypes.value
+    chat_messages = DemoChatMessagesTypes.chat_messages

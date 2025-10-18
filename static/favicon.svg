@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background -->
+  <rect width="32" height="32" fill="#1a1a2e" rx="4"/>
+  
+  <!-- Lightning bolt representing "Volt" -->
+  <path d="M18 4 L10 16 L14 16 L12 28 L24 12 L18 12 Z" 
+        fill="#ffd700" 
+        stroke="#ffed4e" 
+        stroke-width="0.5"
+        stroke-linejoin="round"/>
+  
+  <!-- Subtle gradient overlay for depth -->
+  <defs>
+    <linearGradient id="shine" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffed4e;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#ffd700;stop-opacity:0" />
+    </linearGradient>
+  </defs>
+  <path d="M18 4 L10 16 L14 16 L12 28 L24 12 L18 12 Z" 
+        fill="url(#shine)"/>
+</svg>

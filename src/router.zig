@@ -75,9 +75,8 @@ pub const Router = struct {
             log.debug("qp: {s}", .{entry.key_ptr.*});
         }
 
-        // If there are still remaining template segments, then we have not matched on an entire path,
-        // so we return null
-        if (actual_parts.next() != null) {
+        // If there are still remaining actual or template segments, then we have not matched on an entire path,
+        if (actual_parts.next() != null or template_parts.next() != null) {
             route_params.deinit();
             query_params.deinit();
             return null;

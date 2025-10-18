@@ -1,11 +1,12 @@
+from datetime import datetime, timedelta
 import time
 import logging
 from http import HTTPStatus
 
 from volt.router import Handler, HttpRequest, HttpResponse, Redirect, route, middleware, run_server
 
-from components_gen import Features, Home, BaseNavbar, Demo, DemoTaskList, DemoProgrammingLanguageList, DemoCounter
-from custom_types import NavSelected, DemoProgrammingLanguage
+from components_gen import DemoChatMessages, Features, Home, BaseNavbar, Demo, DemoTaskList, DemoProgrammingLanguageList, DemoCounter
+from custom_types import DemoChatMessagesTypes, Message, NavSelected, DemoProgrammingLanguage, Sender
 
 
 mw_log = logging.getLogger('volt.middleware.py')
@@ -73,28 +74,6 @@ PROGRAMMING_LANGUAGES: list[DemoProgrammingLanguage] = [
     DemoProgrammingLanguage("R", "R", "Statistical computing language", "Data", "text-blue-700", "bg-blue-700/20"),
     DemoProgrammingLanguage("Julia", "Jl", "High-performance scientific computing", "Data", "text-purple-700", "bg-purple-700/20"),
 ]
-
-
-@route("/demo", method="GET")
-def demo(request: HttpRequest) -> HttpResponse:
-    tasks = [
-        "Learn about Volt framework",
-        "Try HTMX integration",
-        "Add a new task!",
-    ]
-
-    context = Demo.Context(
-        request=request,
-        selected=NavSelected.DEMO,
-        tasks=tasks,
-        searching=False,
-        programming_languages=[],
-        value=0,
-        chat_messages=["something"],
-        oob=[BaseNavbar(BaseNavbar.Context(request=request, selected=NavSelected.DEMO, oob=[]))],
-    )
-
-    return HttpResponse(Demo(context).render(request))
 
 
 @route("/demo/counter/{direction:str}", method="POST")
@@ -178,6 +157,67 @@ def demo_add_task(request: HttpRequest) -> HttpResponse:
 @route("/demo/task/delete", method="DELETE")
 def demo_delete_task(_request: HttpRequest) -> HttpResponse:
     return HttpResponse(status=HTTPStatus.OK)
+
+
+CHAT_MESSAGES : DemoChatMessagesTypes.chat_messages = [
+    {
+        "message": "This is amazing!",
+        "sender": Sender.ME,
+        "time": datetime.now() - timedelta(minutes=2),
+    },
+    {
+        "message": "Glad you like it! Volt makes real-time features super easy.",
+        "sender": Sender.THEM,
+        "time": datetime.now() - timedelta(minutes=1),
+    },
+    {
+        "message": "The performance is incredible 🚀",
+        "sender": Sender.ME,
+        "time": datetime.now(),
+    },
+]
+
+@route("/demo/chat", method="POST")
+def demo_add_chat(request: HttpRequest) -> HttpResponse:
+    chat = request.form_data.get("message", [])
+    if len(chat) != 1:
+        log.warning(f"unexpected chat length: {len(chat)}")
+        return HttpResponse(status=HTTPStatus.BAD_REQUEST)
+
+    messages: list[Message] = [{
+        "message": chat[0],
+        "sender": Sender.ME,
+        "time": datetime.now(),
+    }]
+        
+    context = DemoChatMessages.Context(
+        request=request,
+        chat_messages=messages,
+        oob=[],
+    )
+    return HttpResponse(DemoChatMessages(context).render(request))
+
+
+@route("/demo", method="GET")
+def demo(request: HttpRequest) -> HttpResponse:
+    tasks = [
+        "Learn about Volt framework",
+        "Try HTMX integration",
+        "Add a new task!",
+    ]
+    
+    context = Demo.Context(
+        request=request,
+        selected=NavSelected.DEMO,
+        tasks=tasks,
+        searching=False,
+        programming_languages=[],
+        value=0,
+        chat_messages=CHAT_MESSAGES,
+        oob=[BaseNavbar(BaseNavbar.Context(request=request, selected=NavSelected.DEMO, oob=[]))],
+    )
+
+    return HttpResponse(Demo(context).render(request))
 
 
 @route("/quickstart", method="GET")

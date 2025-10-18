@@ -30,5 +30,12 @@ tailwind-watch:
 inspect-coredump:
 	coredumpctl debug --debugger lldb
 
-watch: build tailwind run
-	watchman-make -p '**/*.zig' -t build run -p '**/*.html' '**/*.js' -t tailwind -p '**/*.py' -t run
+generate:
+	python generator.py
+
+watch: build tailwind generate run 
+	watchman-make \
+		-p '**/*.zig' -t build run \
+		-p '**/*.html' '**/*.js' -t tailwind \
+		-p '**/*.html' -t generate \
+		-p '**/*.py' -t run

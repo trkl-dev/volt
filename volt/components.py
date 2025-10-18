@@ -2,7 +2,7 @@ from datetime import datetime
 import logging
 from collections import namedtuple
 from dataclasses import asdict, dataclass
-from enum import StrEnum
+from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
 from jinja2_fragments import render_block
@@ -13,6 +13,13 @@ log = logging.getLogger("volt.py")
 
 environment = Environment(loader=FileSystemLoader("templates/"))
 
+def nice_time(value: Any):
+    if not isinstance(value, datetime):
+        raise ValueError("nice_time filter only accepts type 'datetime'")
+
+    return value.strftime("%H:%M%p") 
+
+environment.filters['nice_time'] = nice_time
 
 Block = namedtuple("Block", ["template_name", "block_name"])
 
