@@ -1,11 +1,9 @@
 from datetime import datetime
 import logging
-from collections import namedtuple
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, NamedTuple
 
 from jinja2 import Environment, FileSystemLoader
-from jinja2_fragments import render_block
 
 from volt.router import HttpRequest
 
@@ -21,7 +19,7 @@ def nice_time(value: Any):
 
 environment.filters['nice_time'] = nice_time
 
-Block = namedtuple("Block", ["template_name", "block_name"])
+Block = NamedTuple("Block", [("template_name", str), ("block_name", str)])
 
 
 class Component:
@@ -32,7 +30,7 @@ class Component:
     render. Ideally, there should be exactly one Component class defined, for every block.
     """
 
-    template_name: str
+    template_name: str = ""
     block_name: str = "content"
 
     @dataclass
@@ -53,6 +51,8 @@ class Component:
         self.context = context
 
     def render(self, request: HttpRequest) -> str:
+        assert self.template_name != "", f"template_name for class {self.__class__} must be defined"
+
         if request.hx_request:
             context = asdict(self.context)
             html = render_block(
@@ -76,6 +76,34 @@ class Component:
         template = environment.get_template(self.template_name)
         html = template.render(context)
         return html
+
+def render_block(
+    environment: Environment,
+    template_name: str,
+    block_name: str,
+    *args: Any,
+    **kwargs: Any,
+) -> str:
+    if environment.is_async:
+        raise RuntimeError("render_block does not currently support async mode. See: https://github.com/trkl-dev/volt/issues/9")
+
+    template = environment.get_template(template_name)
+    try:
+        block_render_func = template.blocks[block_name]
+    except KeyError:
+        raise BlockNotFoundError(block_name, template_name)
+
+    ctx = template.new_context(dict(*args, **kwargs))
+    
+    try:
+        return environment.concat(block_render_func(ctx))
+    except Exception:
+        environment.handle_exception()
+
+
+class BlockNotFoundError(Exception):
+    def __init__(self, block_name: str, template_name: str, message: str | None = None):
+        super().__init__(message or f"Block {block_name} not in template {template_name}")
 
 #
 # # NOTE: Not sure how _this_ would be generated
