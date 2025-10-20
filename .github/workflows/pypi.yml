@@ -13,7 +13,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]  # Windows not currently supported
+        os:   # Windows not currently supported
+          - ubuntu-latest
+          - macos-latest
+          - macos-13  # for x86 support
     
     steps:
       - uses: actions/checkout@v5

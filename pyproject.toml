@@ -1,6 +1,6 @@
 [project]
 name = "volt-framework"
-version = "0.1.1"
+dynamic = ["version"]
 authors = [
   { name="Nick Henderson", email="nick@trkl.dev" },
 ]
@@ -38,7 +38,7 @@ Issues = "https://github.com/trkl-dev/volt/issues"
 Source = "https://github.com/trkl-dev/volt"
 
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -47,6 +47,8 @@ include = ["volt"]
 
 [tool.setuptools.package-data]
 volt = ["lib/*.so", "lib/*.dylib", "lib/*.dll"]
+
+[tool.setuptools_scm]
 
 [tool.pyright]
 reportAny = false
