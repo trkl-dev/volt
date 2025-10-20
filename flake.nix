@@ -33,6 +33,11 @@
           ps.jinja2
           ps.pytest
           ps.requests
+          
+          # Build tools
+          ps.setuptools
+          ps.twine
+          ps.build
         ]);
       in {
         devShells.default = pkgs.mkShell {

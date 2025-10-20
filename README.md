@@ -2,11 +2,18 @@
 
 A lightning-fast Python web framework with a high-performance Zig substrate.
 
+## Installation
+```bash
+pip install volt-framework
+```
+
 ## Vision
 
 Volt combines the simplicity and expressiveness of Python with the raw performance of Zig. Unlike traditional Python web frameworks that rely on slow WSGI/ASGI servers, Volt includes its own blazing-fast web server written in Zig - giving you production-ready performance out of the box.
 
 **Why Volt?**
+- **Create easy SPA-like applications** - Built with HTMX in mind, you can create high quality, responsive applications, without a separate frontend
+- **Type-safe templating** - The Jinja templating you know and love, with the power to generate type safe dataclass components for template context
 - **Zero external dependencies for serving** - No need for gunicorn, uvicorn, or other WSGI/ASGI servers
 - **Batteries included** - Everything you need for modern web development in one package
 - **Performance without complexity** - Write pure Python, get Zig-level speed
@@ -24,7 +31,7 @@ from sqlalchemy.orm import Session
 from volt.router import Handler, HttpRequest, HttpResponse, route, middleware, run_server
 from db import query
 
-
+# Easily add middleware
 @middleware
 def logging(request: HttpRequest, handler: Handler) -> HttpResponse:
     """Add custom logging to each request"""
@@ -34,29 +41,16 @@ def logging(request: HttpRequest, handler: Handler) -> HttpResponse:
     print(f"Request - Path: {request.path}, Time: {end * 1_000 * 1_000 }μs")
     return response
 
-
-@route("/blogs/{id:int}")
-def home(request: HttpRequest) -> HttpResponse:
-    db_url = os.environ["DB_URL"].replace("postgres", "postgresql+psycopg")
-    engine = create_engine(db_url, echo=True)
-
-    with Session(engine) as session:
-        querier = query.Querier(session.connection())
-        volt = querier.get_volt(id=request.route_params['id'])
-
-    return HttpResponse(
-        f"this is the homepage. Volt DB response: {volt.stuff if volt is not None else 'None'}",
-        headers=[{"name": "custom", "value": "header"}]
+# Routes and handlers are simple to define
+@route("/", method="GET")
+def root(request: HttpRequest) -> HttpResponse:
+    context = Home.Context(
+        request=request,
+        selected=NavSelected.HOME,  # HTMX Powered!
     )
-
-@route("/blog?sortby=name")
-def blog(request: HttpRequest) -> HttpResponse:
-    assert request.query_params['sortby'] == name
-
-    import time
-    time.sleep(0.1)
-
-    return HttpResponse(f"this is the blog page, sorted by: {request.query_params['sortby']}")
+    return HttpResponse(
+        Home(context).render(request),
+    )
 
 
 if __name__ == "__main__":
@@ -92,10 +86,10 @@ The result? Dramatically faster request routing, static file serving, and overal
 - Custom middleware support
 - Header handling
 - HTTP/1 and HTTP/1.1
-
-**Coming Soon:**
 - Static file serving
 - Built-in templating engine
+
+**Coming Soon:**
 - ORM integration
 - Advanced middleware (CSRF, CORS, etc.)
 - Production deployment tools

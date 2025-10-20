@@ -1,7 +1,7 @@
 all: watch
 
 build: 
-	zig build -Doptimize=Debug -freference-trace
+	zig build -Doptimize=Debug -freference-trace --prefix volt
 
 run:
 	-pkill -TERM -f "python example.py" && sleep 2 || pkill -KILL -f "python example.py"
@@ -39,3 +39,6 @@ watch: build tailwind generate run
 		-p '**/*.html' '**/*.js' -t tailwind \
 		-p '**/*.html' -t generate \
 		-p '**/*.py' -t run
+
+upload-test:
+	python -m twine upload --repository testpypi dist/*

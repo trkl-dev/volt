@@ -74,8 +74,6 @@ fn runServer(
     stop_iter: u16,
     exit: *bool,
 ) !void {
-    std.debug.assert(routes.len > 0);
-
     const server_addr_slice = std.mem.span(server_addr);
     const addr = try std.net.Address.resolveIp(server_addr_slice, server_port);
 

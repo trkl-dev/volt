@@ -1,0 +1,53 @@
+[project]
+name = "volt-framework"
+version = "0.1.1"
+authors = [
+  { name="Nick Henderson", email="nick@trkl.dev" },
+]
+description = "A lightning-fast, opinionated web framework with a high-performance Zig substrate"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+keywords = ["web", "framework", "http", "async", "performance", "zig"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+dependencies = [
+  "jinja2"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "requests",
+  "pywatchman",
+]
+
+[project.urls]
+Homepage = "https://github.com/trkl-dev/volt"
+Issues = "https://github.com/trkl-dev/volt/issues"
+Source = "https://github.com/trkl-dev/volt"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+# build-backend = "builder"
+build-backend = "setuptools.build_meta"
+# backend-path = ["."]
+
+[tool.setuptools.packages.find]
+where = ["."]  # or ["src"] if your code is in src/
+include = ["volt"]
+
+[tool.setuptools.package-data]
+volt = ["lib/*.so", "lib/*.dylib", "lib/*.dll"]
+
+[tool.pyright]
+reportAny = false
+reportExplicitAny = false

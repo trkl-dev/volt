@@ -2,11 +2,9 @@
 .zig-cache/
 __pycache__/
 zig-out/
+volt/bin/
+volt/lib/
+dist/
+*.egg-info/
+
 static/*.jpg
-
-libroot.so
-libroot.so.o
-librouter.so
-librouter.so.o
-
-

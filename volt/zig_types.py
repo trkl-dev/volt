@@ -2,6 +2,7 @@
 import ctypes
 import faulthandler
 
+from pathlib import Path
 import platform
 from typing import TYPE_CHECKING, Any
 
@@ -10,12 +11,29 @@ faulthandler.enable(
     all_threads=True
 )
 
-lib = None
-if platform.system() == 'Darwin':
-    lib = ctypes.CDLL('zig-out/lib/libvolt.dylib')
-else:
-    lib = ctypes.CDLL('zig-out/lib/libvolt.so')
 
+class UnexpectedOperatingSystem(Exception):
+    ...
+
+
+match platform.system():
+    case "Darwin":
+        extension = "dylib"
+    case "Linux":
+        extension = "so"
+    case "Windows":
+        extension = "dll"
+    case _:
+        raise UnexpectedOperatingSystem(f"Unexpected platform: {platform.system()}")
+
+libvolt_filename = f"lib/libvolt.{extension}"
+
+_lib_path = Path(__file__).parent / libvolt_filename
+
+if not _lib_path.exists():
+    raise RuntimeError(f"{libvolt_filename} not found at {_lib_path}")
+
+lib = ctypes.CDLL(str(_lib_path))
 
 class Header(ctypes.Structure):
     _fields_ = [
