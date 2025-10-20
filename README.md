@@ -57,6 +57,11 @@ if __name__ == "__main__":
     run_server()
 ```
 
+## Platform Support:
+- ✅ Linux (x86_64)
+- ✅ macOS (x86_64, ARM64)
+- ❌ Windows (not yet supported)
+
 ## Why Zig?
 
 Zig is a modern systems programming language that compiles to native machine code - the same performance class as C and Rust. While Python is interpreted at runtime, Zig code runs at native CPU speed with better safety than C and simpler syntax than Rust.

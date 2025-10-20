@@ -19,7 +19,6 @@ pub const std_options: std.Options = .{
 };
 
 var no_logs = false;
-
 var server_is_running = false;
 /// For python to confirm that the server has completed startup, and is ready
 /// to accept connections
@@ -55,12 +54,9 @@ pub export fn run_server(
 
     const arena_allocator = arena.allocator();
 
-    // If NO_LOGS is set, we take that as true, regardless of its value
-    no_logs = std.mem.eql(u8, std.process.getEnvVarOwned(arena_allocator, "NO_LOGS") catch |err| log_blk: {
-        log.warn("error retrieving NO_LOGS environment variable, so logging is enabled: {any}", .{err});
-        break :log_blk "";
-    }, "");
-
+    if (std.posix.getenv("NO_LOGS") != null) {
+        no_logs = true;
+    }
     const routes = registerRoutes(arena_allocator, routes_to_register, num_routes) catch |err| {
         log.err("error registering routes: {any}", .{err});
         return;
@@ -638,6 +634,10 @@ pub fn pyLogger(
     // Currently disabling logging when running in pytest. Seems to be race conditions allowing some logs to
     // get through during test runs when they shouldn't. This github issue seems related:
     // https://github.com/pytest-dev/pytest/issues/13693
+
+    if (no_logs) {
+        return;
+    }
 
     switch (scope) {
         .default => {

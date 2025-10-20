@@ -13,6 +13,8 @@ keywords = ["web", "framework", "http", "async", "performance", "zig"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -37,12 +39,10 @@ Source = "https://github.com/trkl-dev/volt"
 
 [build-system]
 requires = ["setuptools", "wheel"]
-# build-backend = "builder"
 build-backend = "setuptools.build_meta"
-# backend-path = ["."]
 
 [tool.setuptools.packages.find]
-where = ["."]  # or ["src"] if your code is in src/
+where = ["."]
 include = ["volt"]
 
 [tool.setuptools.package-data]
