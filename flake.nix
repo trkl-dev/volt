@@ -36,6 +36,7 @@
           
           # Build tools
           ps.setuptools
+          ps.setuptools-scm
           ps.twine
           ps.build
         ]);

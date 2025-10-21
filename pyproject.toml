@@ -38,7 +38,7 @@ Issues = "https://github.com/trkl-dev/volt/issues"
 Source = "https://github.com/trkl-dev/volt"
 
 [build-system]
-requires = ["setuptools", "wheel", "setuptools-scm>=8"]
+requires = ["setuptools>=80", "wheel", "setuptools-scm[simple]>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
