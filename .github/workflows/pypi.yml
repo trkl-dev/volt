@@ -76,7 +76,6 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
-          verbose: true
 
   # Upload to production PyPI only on releases
   upload_pypi:
@@ -99,5 +98,3 @@ jobs:
       
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
