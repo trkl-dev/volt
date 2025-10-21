@@ -21,6 +21,8 @@ jobs:
     
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # Required for setuptools_scm to work
       
       - name: Setup Zig Compiler
         uses: mlugg/setup-zig@v2
