@@ -35,7 +35,7 @@ jobs:
           python-version: '3.13'
       
       - name: Install build tools
-        run: pip install build setuptools_scm
+        run: pip install .[build]
 
       - name: Check build version
         run: python3 -m setuptools_scm
@@ -50,6 +50,17 @@ jobs:
         run: |
           pip install twine
           twine check dist/*
+
+      - name: Install built wheel
+        run: pip install dist/*.whl
+
+      - name: Install dev requirements for testing
+        run: pip install .[dev]
+
+      - name: Run tests
+        run: pytest
+        env:
+          NO_LOGS: true
       
       - uses: actions/upload-artifact@v4
         with:
