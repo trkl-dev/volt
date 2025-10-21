@@ -33,7 +33,7 @@ jobs:
           python-version: '3.13'
       
       - name: Install build tools
-        run: pip install build
+        run: pip install build setuptools_scm
       
       - name: Build Zig binary
         run: zig build -Doptimize=ReleaseFast --prefix volt
