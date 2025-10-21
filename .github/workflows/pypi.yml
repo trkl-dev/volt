@@ -13,10 +13,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os:   # Windows not currently supported
+        os:
           - ubuntu-latest
           - macos-latest
-          - macos-13  # for x86 support
+          # - macos-13  # for x86 support # Not supported, takes too long to build in GA
+          # - windows-latest # Not supported, zig code needs rework
     
     steps:
       - uses: actions/checkout@v5

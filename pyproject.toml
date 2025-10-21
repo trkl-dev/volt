@@ -49,6 +49,7 @@ include = ["volt"]
 volt = ["lib/*.so", "lib/*.dylib", "lib/*.dll"]
 
 [tool.setuptools_scm]
+local_scheme = "no-local-version"
 
 [tool.pyright]
 reportAny = false
