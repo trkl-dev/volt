@@ -34,6 +34,9 @@ jobs:
       
       - name: Install build tools
         run: pip install build setuptools_scm
+
+      - name: Check build version
+        run: python3 -m setuptools_scm
       
       - name: Build Zig binary
         run: zig build -Doptimize=ReleaseFast --prefix volt
