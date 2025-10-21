@@ -26,9 +26,21 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# For building Volt
+build = [
+  "setuptools",
+  "setuptools_scm",
+  "build",
+  "wheel",
+  "twine",
+]
+# For developing Volt
 dev = [
   "pytest",
   "requests",
+]
+# For developers _using_ Volt
+work = [
   "pywatchman",
 ]
 
