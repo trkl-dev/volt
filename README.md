@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
 ## Platform Support:
 - ✅ Linux (x86_64)
-- ✅ macOS (x86_64, ARM64)
+- ✅ macOS (ARM64)
 - ❌ Windows (not yet supported)
 
 ## Why Zig?
