@@ -86,12 +86,21 @@ jobs:
           pattern: wheel-*
           merge-multiple: true
           path: dist
+
+      - name: Publish to Test PyPI (Debugging)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+          verbose: true
+        if: runner.debug == '1'
       
       - name: Publish to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
+        if: runner.debug == '0'
 
   # Upload to production PyPI only on releases
   upload_pypi:
