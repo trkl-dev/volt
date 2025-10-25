@@ -263,7 +263,7 @@ def route(path: str, method: str = "GET"):
                         request_cookies.load(header.value)
                     if header.name == 'Content-Type' and header.value == "application/x-www-form-urlencoded":
                         form_data = parse_qs(request_body)
-
+                        log.debug(f"parsed form data: {form_data}")
 
                 request_object = HttpRequest(
                     method=ctypes.string_at(req.method).decode('utf-8'),
