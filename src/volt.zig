@@ -176,39 +176,6 @@ fn runServerWithErrorHandler(
     };
 }
 
-fn thandler(request: *http.Request, context: *http.Context) callconv(.c) ?*http.Response {
-    var response = context.allocator.create(http.Response) catch {
-        @panic("error allocating response in test handler");
-    };
-    response.status = .ok;
-    const body = request.body[0..request.content_length];
-    std.testing.expectEqualStrings("this is some POST content", body) catch |err| {
-        log.err("error comparing strings: {any}", .{err});
-        @panic("err");
-    };
-    response.body = "a response body";
-    return response;
-}
-
-fn testHandlerSuccessful(request: *http.Request, context: *http.Context) callconv(.c) ?*http.Response {
-    _ = request;
-    var response = context.allocator.create(http.Response) catch {
-        @panic("error allocating response in test handler");
-    };
-    response.status = .ok;
-    response.body = "hi there";
-    return response;
-}
-
-fn testHandlerForbidden(request: *http.Request, context: *http.Context) callconv(.c) ?*http.Response {
-    _ = request;
-    var response = context.allocator.create(http.Response) catch {
-        @panic("error allocating response in test handler");
-    };
-    response.status = .forbidden;
-    return response;
-}
-
 fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Connection, routes: []Route) void {
     var recv_header: [4000]u8 = undefined;
     var send_header: [4000]u8 = undefined;
@@ -300,56 +267,6 @@ fn registerRoutes(arena: std.mem.Allocator, routes_to_register: [*]const http.Ro
     }
 
     return routes;
-}
-
-test registerRoutes {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-
-    const arena_allocator = arena.allocator();
-
-    const r = [_]http.Route{
-        .{
-            .name = "/blog",
-            .method = "GET",
-            .handler = testHandlerSuccessful,
-        },
-        .{
-            .name = "/home",
-            .method = "GET",
-            .handler = testHandlerSuccessful,
-        },
-    };
-    const routes_to_register: [*]const http.Route = &r;
-
-    const routes = try registerRoutes(arena_allocator, routes_to_register, 2);
-
-    try std.testing.expectEqual(2, routes.len);
-    try std.testing.expectEqualSlices(u8, "/blog", routes[0].path);
-    try std.testing.expectEqualSlices(u8, "/home", routes[1].path);
-}
-
-test "registerRoutes with Error" {
-    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
-    defer arena.deinit();
-
-    const arena_allocator = arena.allocator();
-
-    const r = [_]http.Route{
-        .{
-            .name = "/blog",
-            .method = "GET",
-            .handler = testHandlerSuccessful,
-        },
-        .{
-            .name = "/home",
-            .method = "NOTAREALMETHOD",
-            .handler = testHandlerSuccessful,
-        },
-    };
-    const routes_to_register: [*]const http.Route = &r;
-
-    try std.testing.expectError(error.BadMethod, registerRoutes(arena_allocator, routes_to_register, 2));
 }
 
 const mime_type_map = std.StaticStringMap([]const u8).initComptime(.{

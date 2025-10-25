@@ -119,7 +119,7 @@ class Route(ctypes.Structure):
     ]
 
 
-lib.run_server.argtypes = [ctypes.c_char_p, ctypes.c_uint16, ctypes.POINTER(Route), ctypes.c_uint16]
+lib.run_server.argtypes = [ctypes.c_char_p, ctypes.c_uint16, ctypes.POINTER(Route), ctypes.c_uint16, ctypes.c_void_p, ctypes.c_void_p]
 lib.run_server.restype = None
 
 lib.shutdown_server.argtypes = []
