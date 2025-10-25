@@ -65,8 +65,11 @@ where = ["."]
 include = ["volt"]
 
 [tool.setuptools.package-data]
-volt = ["lib/*.so", "lib/*.dylib", "lib/*.dll"]
+volt = ["volt/lib/*.so", "volt/lib/*.dylib", "volt/lib/*.dll"]
 
 [tool.setuptools_scm]
 version_scheme = "python-simplified-semver"
 local_scheme = "no-local-version"
+
+[tool.cibuildwheel]
+before-all = "uname -a"
