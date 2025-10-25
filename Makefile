@@ -16,6 +16,9 @@ debug-test:
 	lldb pytest
 
 test: build
+	@echo "Runnning Zig tests..."
+	zig test src/volt.zig
+	@echo "Runnning Python tests..."
 	NO_LOGS="true" pytest
 
 test-verbose: build
@@ -31,7 +34,7 @@ inspect-coredump:
 	coredumpctl debug --debugger lldb
 
 generate:
-	python generator.py
+	python -m volt.cli generate
 
 watch: build tailwind generate run 
 	watchman-make \

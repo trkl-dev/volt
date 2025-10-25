@@ -26,6 +26,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# For developers using Volt in their work
+dev = [
+  "pywatchman",
+]
+# For developing Volt
+maintainer = [
+  "pytest",
+  "requests",
+]
 # For building Volt
 build = [
   "setuptools",
@@ -34,20 +43,18 @@ build = [
   "wheel",
   "twine",
 ]
-# For developing Volt
-dev = [
-  "pytest",
-  "requests",
-]
-# For developers _using_ Volt
-work = [
-  "pywatchman",
-]
 
 [project.urls]
 Homepage = "https://github.com/trkl-dev/volt"
 Issues = "https://github.com/trkl-dev/volt/issues"
 Source = "https://github.com/trkl-dev/volt"
+
+[project.scripts]
+volt = "volt.cli:main"
+
+[tool.pyright]
+reportAny = false
+reportExplicitAny = false
 
 [build-system]
 requires = ["setuptools>=80", "wheel", "setuptools-scm>=8"]
@@ -63,7 +70,3 @@ volt = ["lib/*.so", "lib/*.dylib", "lib/*.dll"]
 [tool.setuptools_scm]
 version_scheme = "python-simplified-semver"
 local_scheme = "no-local-version"
-
-[tool.pyright]
-reportAny = false
-reportExplicitAny = false

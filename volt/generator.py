@@ -1,8 +1,11 @@
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, asdict
+import logging
+from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, meta
 from jinja2.nodes import Block, For, Name
 
+log = logging.getLogger('volt.generator.py')
 
 environment = Environment(loader=FileSystemLoader("templates/"))
 
@@ -32,7 +35,7 @@ def get_block_children(block: Block, template_name: str, referenced_templates: I
     for child_block in child_blocks:
         if not isinstance(child_block, Block):
             continue
-        print(f"Inspecting block: {child_block.name}")
+        log.debug(f"Inspecting block: {child_block.name}")
         blocks.append(child_block)
         blocks.extend(get_block_children(child_block, template_name, referenced_templates, top_level=False))
 
@@ -62,7 +65,7 @@ def get_block_children(block: Block, template_name: str, referenced_templates: I
         parent_components=parent_components,
         fields=fields,
     )
-    print(f"Adding component: {component}")
+    log.debug(f"Adding component: {component}")
     all_components.append(component)
     return blocks
 
@@ -78,7 +81,8 @@ def get_block_fields(block: Block) -> list[str]:
         excludes: list[Name] = []
         # TODO: Vars used in a for loop must be iterable
         # Can we also check if the target has fields, and use those as well?
-        fors = template_ast.find_all(For)
+        # block.
+        fors = block.find_all(For)
         for f in fors:
             assert isinstance(f.target, Name), (
                 f"Unexpected For type: {type(f.target)} for {f.target}"
@@ -95,21 +99,19 @@ def get_block_fields(block: Block) -> list[str]:
                     break
             if skip:
                 continue
-            # print(name)
             already_exists = False
             if name.ctx == "load":
                 for var in fields:
                     if name.name == var:
                         already_exists = True
                 if not already_exists:
-                    # print(f"block: {block.name} var: {name.name}")
                     fields.append(name.name)
 
     return fields
 
 # TODO: Check against templates without blocks
 # TODO: Figure out how to add Navbar to base.html component (top level blocks are not handled correctly atm)
-if __name__ == "__main__":
+def generate():
     context = Context(
         components=[],
         import_types=True,
@@ -120,7 +122,7 @@ if __name__ == "__main__":
 
     template_names = environment.list_templates()
     for template_name in template_names:
-        print(f"Parsing template: {template_name}")
+        log.info(f"Parsing template: {template_name}")
         template_source = environment.loader.get_source(environment, template_name)[0]
         template_ast = environment.parse(template_source)
 
@@ -132,7 +134,7 @@ if __name__ == "__main__":
         for block in blocks:
             if not isinstance(block, Block):
                 continue
-            print(f"Inspecting block: {block.name}")
+            log.debug(f"Inspecting block: {block.name}")
             template_blocks.extend(get_block_children(block, template_name, referenced_templates, top_level=True))
             parent_components.append(template_name[: template_name.find(".")].title() + name_as_title(block.name))
 
@@ -147,14 +149,18 @@ if __name__ == "__main__":
 
 
     for component in all_components:
-        print(f"component: {component}")
+        log.warning(f"component created: {component}")
         context.components.append(component)
 
-    gen_environment = Environment(loader=FileSystemLoader("./"))
-    template_file = "components.py.j2"
+    parent_dir = Path(__file__).parent
+    gen_environment = Environment(loader=FileSystemLoader(parent_dir))
+    template_file =  "components.py.j2"
     template = gen_environment.get_template(template_file)
     output = template.render(asdict(context))
 
     with open("components_gen.py", "w") as f:
         len_written = f.write(output)
         assert len_written == len(output)
+
+if __name__ == "__main__":
+    generate()
