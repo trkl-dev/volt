@@ -43,6 +43,9 @@ jobs:
       - name: Build Zig binary
         run: zig build -Doptimize=ReleaseFast --prefix volt
       
+      - name: Install cibuildwheel
+        run: pip install cibuildwheel
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.2.1
       
