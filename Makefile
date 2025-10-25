@@ -1,7 +1,7 @@
 all: watch
 
 build-zig: 
-	zig build -Doptimize=Debug -freference-trace --prefix volt
+	zig build -Doptimize=Debug -freference-trace
 
 run:
 	-pkill -TERM -f "python example.py" && sleep 2 || pkill -KILL -f "python example.py"

@@ -6,5 +6,6 @@ volt/bin/
 volt/lib/
 dist/
 *.egg-info/
+build/
 
 static/*.jpg

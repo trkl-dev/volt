@@ -28,12 +28,15 @@ match platform.system():
 
 libvolt_filename = f"lib/libvolt.{extension}"
 
-_lib_path = Path(__file__).parent / libvolt_filename
+lib_path = Path(__file__).parent / libvolt_filename
 
-if not _lib_path.exists():
-    raise RuntimeError(f"{libvolt_filename} not found at {_lib_path}")
+if not lib_path.exists():
+    lib_path = Path(__file__).parent.parent / "zig-out" / libvolt_filename
 
-lib = ctypes.CDLL(str(_lib_path))
+if not lib_path.exists():
+    raise RuntimeError(f"{libvolt_filename} not found at {lib_path}")
+
+lib = ctypes.CDLL(str(lib_path))
 
 class Header(ctypes.Structure):
     _fields_ = [
