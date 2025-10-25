@@ -316,7 +316,7 @@ test isPathSafe {
     try std.testing.expect(isPathSafe("file/static/something/here.js") == true);
 }
 
-fn handleStaticRoute(allocator: std.mem.Allocator, request: *std.http.Server.Request) !std.http.Status {
+fn handleStaticRoute(request: *std.http.Server.Request) !std.http.Status {
     log.debug("running handleStaticRoute", .{});
 
     // Build full file path
@@ -326,7 +326,6 @@ fn handleStaticRoute(allocator: std.mem.Allocator, request: *std.http.Server.Req
         try request.respond("", .{ .status = std.http.Status.forbidden });
         return .forbidden;
     }
-
     // Strip leading '/' and open file
     const file = std.fs.cwd().openFile(file_path[1..], .{}) catch |err| switch (err) {
         error.FileNotFound => {
@@ -339,7 +338,6 @@ fn handleStaticRoute(allocator: std.mem.Allocator, request: *std.http.Server.Req
     defer file.close();
 
     const file_size = try file.getEndPos();
-    const content_length = try std.fmt.allocPrint(allocator, "{d}", .{file_size});
 
     const mime_type = getMimeType(file_path);
     const status: std.http.Status = .ok;
@@ -348,15 +346,11 @@ fn handleStaticRoute(allocator: std.mem.Allocator, request: *std.http.Server.Req
     if (mime_type == null) {
         respond_options = .{
             .status = status,
-            .extra_headers = &.{
-                .{ .name = "content-length", .value = content_length },
-            },
         };
     } else {
         respond_options = .{
             .status = status,
             .extra_headers = &.{
-                .{ .name = "content-length", .value = content_length },
                 .{ .name = "content-type", .value = mime_type.? },
             },
         };
@@ -403,7 +397,7 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
 
     // Static file serving
     if (std.mem.startsWith(u8, request.head.target, "/static/")) {
-        const status = try handleStaticRoute(allocator, request);
+        const status = try handleStaticRoute(request);
         return status;
     }
 

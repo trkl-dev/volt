@@ -1,3 +1,6 @@
+from collections.abc import Generator
+from pathlib import Path
+import shutil
 import pytest
 import requests
 
@@ -267,3 +270,32 @@ def test_out_of_order():
     assert response.content == b"first nested"
     assert response.status_code == HTTPStatus.OK
 
+
+@pytest.fixture(scope="function")
+def styles_css_file() -> Generator[None]:
+    """Create a static styles.css file for the duration of the test"""
+    css_content = """
+a {
+  color: inherit;
+  -webkit-text-decoration: inherit;
+  text-decoration: inherit;
+}
+"""
+    path = Path(__file__).parent.parent
+    static_dir = path / "static"
+    static_dir.mkdir()
+    styles_file = static_dir / "styles.css"
+    _ = styles_file.write_text(css_content, encoding="utf-8")
+    yield
+    shutil.rmtree(static_dir)
+
+
+def test_static(styles_css_file: None):
+    _ = styles_css_file
+    response = requests.get("http://localhost:1236/static/styles.css")
+    assert response.status_code == HTTPStatus.OK
+
+    assert len(response.headers) == 2
+
+    assert response.headers.get("content-type") == "text/css"
+    assert response.headers.get("content-length") == "89"
