@@ -259,9 +259,9 @@ def route(path: str, method: str = "GET"):
                 request_cookies = http_cookies.SimpleCookie()
                 form_data: dict[str, list[str]] = {}
                 for header in request_headers:
-                    if header.name == 'Cookie':
+                    if header.name.lower() == 'cookie':
                         request_cookies.load(header.value)
-                    if header.name == 'Content-Type' and header.value == "application/x-www-form-urlencoded":
+                    if header.name.lower() == 'content-type' and header.value == "application/x-www-form-urlencoded":
                         form_data = parse_qs(request_body)
                         log.debug(f"parsed form data: {form_data}")
 
