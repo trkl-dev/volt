@@ -45,6 +45,8 @@ jobs:
       
       - name: Build wheel
         run: python -m build --wheel
+        env:
+          CIBUILDWHEEL: 1
       
       - name: Check wheel
         run: |
@@ -84,8 +86,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: wheel-*
-          merge-multiple: true
-          path: dist
+          path: dist-tmp
+
+      - name: Collect wheels
+        run: |
+          mkdir -p dist
+          cp dist-tmp/*.whl dist/
 
       - name: Publish to Test PyPI (Debugging)
         uses: pypa/gh-action-pypi-publish@release/v1
