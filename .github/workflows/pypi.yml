@@ -43,18 +43,16 @@ jobs:
       - name: Build Zig binary
         run: zig build -Doptimize=ReleaseFast --prefix volt
       
-      - name: Build wheel
-        run: python -m build --wheel
-        env:
-          CIBUILDWHEEL: 1
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v3.2.1
       
       - name: Check wheel
         run: |
           pip install twine
-          twine check dist/*
+          twine check wheelhouse/*
 
       - name: Install built wheel
-        run: pip install dist/*.whl
+        run: pip install wheelhouse/*.whl
 
       - name: Install maintainer requirements for testing
         run: pip install .[maintainer]
@@ -67,7 +65,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.os }}
-          path: dist/*.whl
+          path: wheelhouse/*.whl
           retention-days: 7
 
   # Upload to Test PyPI on every push to main
@@ -85,13 +83,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: wheel-*
-          path: dist-tmp
-
-      - name: Collect wheels
-        run: |
-          mkdir -p dist
-          cp dist-tmp/*.whl dist/
+          pattern: cibw-*
+          path: dist
 
       - name: Publish to Test PyPI (Debugging)
         uses: pypa/gh-action-pypi-publish@release/v1
