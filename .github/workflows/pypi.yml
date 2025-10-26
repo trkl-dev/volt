@@ -50,20 +50,19 @@ jobs:
 
       - name: Build wheel
         run: python -m build
+        env:
+          MACOSX_DEPLOYMENT_TARGET: 15.7
+
+      - name: Install auditwheel (Linux only)
+        if: runner.os == 'Linux'
+        run: pip install auditwheel
+
+      - name: Repair wheel with auditwheel (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          auditwheel repair dist/*.whl -w dist/
+          rm dist/*-linux_*.whl  # Remove the non-manylinux wheel
       
-      # - name: Build wheels (Debugging)
-      #   uses: pypa/cibuildwheel@v3.2.1
-      #   if: runner.debug == '1'
-      #   env:
-      #     CIBW_BUILD_VERBOSITY: 1
-      #     MACOSX_DEPLOYMENT_TARGET: 15.7
-      #
-      # - name: Build wheels
-      #   uses: pypa/cibuildwheel@v3.2.1
-      #   if: runner.debug == '0'
-      #   env:
-      #     MACOSX_DEPLOYMENT_TARGET: 15.7
-      #
       - name: Check wheel
         run: |
           pip install twine
