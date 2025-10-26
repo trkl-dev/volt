@@ -1,6 +1,6 @@
-all: watch
+all: build 
 
-build-zig: 
+build: 
 	zig build -Doptimize=Debug -freference-trace
 
 run:
@@ -31,7 +31,7 @@ inspect-coredump:
 generate:
 	python -m volt.cli generate
 
-watch: build-zig tailwind generate run 
+watch: build-zig generate run 
 	watchman-make \
 		-p '**/*.zig' -t build run \
 		-p '**/*.html' '**/*.js' -t tailwind \

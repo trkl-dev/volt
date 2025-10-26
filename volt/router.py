@@ -140,10 +140,10 @@ type Handler = Callable[[HttpRequest], HttpResponse]
 def htmx_parse_request(request: HttpRequest):
     """Parse the provided request and update HTMX related attributes accordingly"""
     for header in request.headers:
-        if header.name == "HX-Request" and header.value.lower() == "true":
+        if header.name.lower() == "hx-request" and header.value.lower() == "true":
             request.hx_request = True
 
-        if header.name == "HX-Fragment":
+        if header.name.lower() == "hx-fragment":
             request.hx_fragment = header.value
 
 
