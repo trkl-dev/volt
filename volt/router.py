@@ -1,4 +1,3 @@
-# pyright: basic
 import ctypes
 import gc
 import logging
@@ -8,6 +7,7 @@ import time
 from collections.abc import Callable
 from http import HTTPMethod, HTTPStatus
 from http import cookies as http_cookies
+from types import FrameType
 from typing import Literal, TypedDict, override
 from urllib.parse import parse_qs
 
@@ -193,7 +193,7 @@ def route(path: str, method: str = "GET"):
                     num_query_params
                 )
 
-                query_params = {}
+                query_params: dict[str, str] = {}
                 for i in range(num_keys):
                     if keys_array[i]:
                         key_bytes = ctypes.string_at(keys_array[i], key_lengths_array[i])
@@ -220,7 +220,7 @@ def route(path: str, method: str = "GET"):
                     size
                 )
                 
-                route_params = {}
+                route_params: dict[str, str|int] = {}
                 for i in range(num_keys):
                     key_bytes = ctypes.string_at(keys_array[i], key_lengths_array[i])
                     key = key_bytes.decode('utf-8')
@@ -344,7 +344,7 @@ def route(path: str, method: str = "GET"):
 @ctypes.PYFUNCTYPE(None)
 def collect_garbage():
     log.debug("running garbage collection...")
-    gc.collect()
+    _ = gc.collect()
     log.debug("garbage collection complete.")
 
 
@@ -364,7 +364,7 @@ def log_message(message_ptr: ctypes.c_char_p, message_len: int, level: int):
             raise Exception(f"Unexpected level for log_message: {level}")
 
 
-def _run_server(server_addr, server_port):
+def _run_server(server_addr: str, server_port: int):
     # TODO: Check that server_port here is only u16
     def run():
         routes_array_type = zt.Route * len(routes)
@@ -406,10 +406,10 @@ def shutdown():
     log.debug("server stopped.")
 
 
-def handle_sigint(_signum, _frame):
+def handle_sigint(_signum: int, _frame: FrameType | None):
     log.warning("Caught ctrl+c - shutting down Zig server...")
     shutdown()
 
 
-signal.signal(signal.SIGINT, handle_sigint)
-signal.signal(signal.SIGTERM, handle_sigint)
+_ = signal.signal(signal.SIGINT, handle_sigint)
+_ = signal.signal(signal.SIGTERM, handle_sigint)
