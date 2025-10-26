@@ -427,28 +427,18 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
         num_headers += 1;
     }
 
-    const headers = try allocator.alloc(http.Header, num_headers);
-    defer allocator.free(headers);
+    const headers = try arena_allocator.alloc(http.Header, num_headers);
 
     var header_iterator = request.iterateHeaders();
     var index: usize = 0;
     while (header_iterator.next()) |header| {
-        const header_name = try allocator.dupeZ(u8, header.name);
-        const header_value = try allocator.dupeZ(u8, header.value);
+        const header_name = try arena_allocator.dupeZ(u8, header.name);
+        const header_value = try arena_allocator.dupeZ(u8, header.value);
         headers[index] = http.Header{ .name = header_name, .value = header_value };
         index += 1;
     }
 
-    defer {
-        for (headers) |header| {
-            // .free wants a slice, so we convert the null terminated strings to slices for freeing
-            allocator.free(std.mem.span(header.name));
-            allocator.free(std.mem.span(header.value));
-        }
-    }
-
-    const path_nt = try allocator.dupeZ(u8, head.target);
-    defer allocator.free(path_nt);
+    const path_nt = try arena_allocator.dupeZ(u8, head.target);
 
     const method = std.enums.tagName(std.http.Method, head.method);
     if (method == null) {
@@ -458,8 +448,7 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
         return .method_not_allowed;
     }
 
-    const method_nt = try allocator.dupeZ(u8, method.?);
-    defer allocator.free(method_nt);
+    const method_nt = try arena_allocator.dupeZ(u8, method.?);
 
     // Do this last as it invalidates `request.head`
     var buffer: [8000]u8 = undefined;

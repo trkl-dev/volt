@@ -45,7 +45,7 @@ build = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/trkl-dev/volt"
+Homepage = "https://volt.trkl.dev"
 Issues = "https://github.com/trkl-dev/volt/issues"
 Source = "https://github.com/trkl-dev/volt"
 

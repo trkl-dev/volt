@@ -15,13 +15,13 @@ debug-test:
 	-pkill -TERM -f "python example.py" && sleep 2 || pkill -KILL -f "python example.py"
 	lldb pytest
 
-test: build-zig
+test: build
 	@echo "Runnning Zig tests..."
 	zig test src/volt.zig
 	@echo "Runnning Python tests..."
 	NO_LOGS="true" pytest
 
-test-verbose: build-zig
+test-verbose: build
 	zig test src/volt.zig
 	pytest -svv
 
@@ -31,7 +31,7 @@ inspect-coredump:
 generate:
 	python -m volt.cli generate
 
-watch: build-zig generate run 
+watch: build generate run 
 	watchman-make \
 		-p '**/*.zig' -t build run \
 		-p '**/*.html' '**/*.js' -t tailwind \
