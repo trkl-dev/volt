@@ -11,6 +11,8 @@ from types import FrameType
 from typing import Literal, TypedDict, override
 from urllib.parse import parse_qs
 
+from volt import config
+
 from . import zig_types as zt
 
 zig_logger = logging.getLogger("volt.zig")
@@ -432,8 +434,12 @@ def _run_server(server_addr: str, server_port: int):
 server_thread = None
 
 
-def run_server(server_addr: str = "127.0.0.1", server_port: int = 1234):
+def run_server(server_addr: str | None = None, server_port: int | None = None):
     global server_thread
+
+    server_addr = server_addr or config.server_addr
+    server_port = server_port or config.server_port
+
     server_thread = threading.Thread(target=_run_server(server_addr, server_port))
     server_thread.start()
     # Wait for server to start

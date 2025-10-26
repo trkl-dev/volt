@@ -1,5 +1,4 @@
 import logging
-import os
 from typing import override
 
 
@@ -30,5 +29,5 @@ handler.setFormatter(formatter)
 volt_parent = logging.getLogger("volt")
 volt_parent.addHandler(handler)
 
-log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
-volt_parent.setLevel(log_level)
+volt_parent.setLevel(logging.INFO)
+
