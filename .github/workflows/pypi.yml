@@ -42,6 +42,10 @@ jobs:
       
       - name: Build Zig binary
         run: zig build -Doptimize=ReleaseFast
+
+      - name: Check binaries
+        run: |
+          file zig-out/lib/*
       
       - name: Build wheels (Debugging)
         uses: pypa/cibuildwheel@v3.2.1
