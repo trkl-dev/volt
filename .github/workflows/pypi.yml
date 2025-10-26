@@ -47,27 +47,30 @@ jobs:
         if: runner.debug == '1'
         run: |
           file zig-out/lib/*
-      
-      - name: Build wheels (Debugging)
-        uses: pypa/cibuildwheel@v3.2.1
-        if: runner.debug == '1'
-        env:
-          CIBW_BUILD_VERBOSITY: 1
-          MACOSX_DEPLOYMENT_TARGET: 15.7
 
-      - name: Build wheels
-        uses: pypa/cibuildwheel@v3.2.1
-        if: runner.debug == '0'
-        env:
-          MACOSX_DEPLOYMENT_TARGET: 15.7
+      - name: Build wheel
+        run: python -m build
       
+      # - name: Build wheels (Debugging)
+      #   uses: pypa/cibuildwheel@v3.2.1
+      #   if: runner.debug == '1'
+      #   env:
+      #     CIBW_BUILD_VERBOSITY: 1
+      #     MACOSX_DEPLOYMENT_TARGET: 15.7
+      #
+      # - name: Build wheels
+      #   uses: pypa/cibuildwheel@v3.2.1
+      #   if: runner.debug == '0'
+      #   env:
+      #     MACOSX_DEPLOYMENT_TARGET: 15.7
+      #
       - name: Check wheel
         run: |
           pip install twine
-          twine check wheelhouse/*
+          twine check dist/*
 
       - name: Install built wheel
-        run: pip install wheelhouse/*.whl
+        run: pip install dist/*.whl
 
       - name: Install maintainer requirements for testing
         run: pip install .[maintainer]
@@ -80,7 +83,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: wheel-${{ matrix.os }}
-          path: wheelhouse/*.whl
+          path: dist/*.whl
           retention-days: 7
 
   # Upload to Test PyPI on every push to main
@@ -98,7 +101,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: cibw-*
+          pattern: wheel-*
+          merge-multiple: true
           path: dist
 
       - name: Publish to Test PyPI (Debugging)
