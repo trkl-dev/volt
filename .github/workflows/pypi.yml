@@ -41,9 +41,10 @@ jobs:
         run: python3 -m setuptools_scm
       
       - name: Build Zig binary
-        run: zig build -Doptimize=ReleaseFast
+        run: zig build -Doptimize=ReleaseFast --prefix volt
 
       - name: Check binaries
+        if: runner.debug == '1'
         run: |
           file zig-out/lib/*
       

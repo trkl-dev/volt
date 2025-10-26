@@ -65,7 +65,7 @@ where = ["."]
 include = ["volt"]
 
 [tool.setuptools.package-data]
-volt = ["zig-out/lib/*.so", "zig-out/lib/*.dylib", "zig-out/lib/*.dll"]
+volt = ["volt/lib/*.so", "volt/lib/*.dylib", "volt/lib/*.dll"]
 
 [tool.setuptools_scm]
 version_scheme = "python-simplified-semver"
