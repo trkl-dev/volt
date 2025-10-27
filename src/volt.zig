@@ -46,8 +46,7 @@ pub export fn run_server(
         server_is_running = false;
     }
 
-    var gpa = std.heap.DebugAllocator(.{}).init;
-    const allocator = gpa.allocator();
+    const allocator = std.heap.smp_allocator;
 
     var arena = std.heap.ArenaAllocator.init(allocator);
     defer arena.deinit();
