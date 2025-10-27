@@ -2,7 +2,9 @@ name: Build and Publish Wheels
 
 on: 
   push:
-    branches: [main, 11-memory-leak]
+    branches: 
+      - main
+      - 11-memory-leak
   release:
     types: [published]
   workflow_dispatch:  # Allows manual triggering
