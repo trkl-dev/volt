@@ -56,6 +56,7 @@ pub export fn run_server(
     if (std.posix.getenv("NO_LOGS") != null) {
         no_logs = true;
     }
+
     const routes = registerRoutes(arena_allocator, routes_to_register, num_routes) catch |err| {
         log.err("error registering routes: {any}", .{err});
         return;
@@ -138,7 +139,7 @@ fn runServer(
 
         // Give each new connection a new thread.
         // TODO: This should probably be a threadpool, and the closure of threads handled properly
-        _ = std.Thread.spawn(
+        const thread = std.Thread.spawn(
             .{},
             handleConnection,
             .{ allocator, connection, routes },
@@ -146,6 +147,7 @@ fn runServer(
             log.err("failed to spawn thread: {any}", .{err});
             continue;
         };
+        thread.detach();
         log.debug("Thread spawned", .{});
     }
 
@@ -259,7 +261,7 @@ fn registerRoutes(arena: std.mem.Allocator, routes_to_register: [*]const http.Ro
             return error.BadMethod;
         }
         routes[i].method = method.?;
-        routes[i].path = try arena.dupeZ(u8, std.mem.span(routes_to_register[i].name));
+        routes[i].path = std.mem.span(routes_to_register[i].name);
         routes[i].handler = routes_to_register[i].handler;
 
         log.debug("zig: Route registered: {s} -> {any}", .{ routes[i].path, routes[i].handler });

@@ -2,7 +2,7 @@ name: Build and Publish Wheels
 
 on: 
   push:
-    branches: [main]
+    branches: [main, 11-memory-leak]
   release:
     types: [published]
   workflow_dispatch:  # Allows manual triggering
@@ -16,8 +16,6 @@ jobs:
         os:
           - ubuntu-latest
           - macos-latest
-          # - macos-13  # for x86 support # Not supported, takes too long to build in GA
-          # - windows-latest # Not supported, zig code needs rework
     
     steps:
       - uses: actions/checkout@v5
