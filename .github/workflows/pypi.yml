@@ -95,7 +95,7 @@ jobs:
       url: https://test.pypi.org/project/volt-framework/
     permissions:
       id-token: write
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push'
     
     steps:
       - uses: actions/download-artifact@v4
