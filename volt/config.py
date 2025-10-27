@@ -35,8 +35,9 @@ T = TypeVar("T")
 
 
 def get_config_value(name: str, default: T) -> T:
-    value = _volt_config_env.get(
-        name, _volt_config.get(name, os.environ.get(f"VOLT_{name.upper()}", default))
+    value = os.environ.get(
+        f"VOLT_{name.upper()}",
+        _volt_config_env.get(name, _volt_config.get(name, default)),
     )
     if not isinstance(value, type(default)):
         log.warning(
