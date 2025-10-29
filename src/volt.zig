@@ -62,20 +62,19 @@ pub export fn run_server(
         return;
     };
 
-    runServer(allocator, server_addr, server_port, routes, 0, &should_exit) catch |err| {
+    var router = Router.init(arena_allocator, routes);
+
+    runServer(allocator, server_addr, server_port, &router, &should_exit) catch |err| {
         log.err("error running server: {any}", .{err});
         return;
     };
 }
 
-/// stop_iter will stop the server after stop_iter iterations, unless stop_iter is 0. This is for testing,
-/// so as to prevent blocking
 fn runServer(
     allocator: std.mem.Allocator,
     server_addr: [*:0]const u8,
     server_port: u16,
-    routes: []Route,
-    stop_iter: u16,
+    router: *Router,
     exit: *bool,
 ) !void {
     const server_addr_slice = std.mem.span(server_addr);
@@ -115,16 +114,9 @@ fn runServer(
 
     server_is_running = true;
 
-    var num_iters: u16 = 0;
     // Continue checking for new connections. New connections are given a separate thread to be handled in.
     // This thread will continue waiting for requests on the same connection until the connection is closed.
     while (!exit.*) {
-        if (stop_iter > 0 and num_iters >= stop_iter) {
-            break;
-        }
-        if (stop_iter > 0) {
-            num_iters += 1;
-        }
         const connection = server.accept() catch |err| {
             if (err == error.WouldBlock) {
                 std.Thread.sleep(10 * std.time.ns_per_ms);
@@ -140,9 +132,11 @@ fn runServer(
         // Give each new connection a new thread.
         // TODO: This should probably be a threadpool, and the closure of threads handled properly
         const thread = std.Thread.spawn(
-            .{},
+            .{
+                .allocator = allocator,
+            },
             handleConnection,
-            .{ allocator, connection, routes },
+            .{ allocator, &connection, router },
         ) catch |err| {
             log.err("failed to spawn thread: {any}", .{err});
             continue;
@@ -154,30 +148,7 @@ fn runServer(
     log.info("Shutting down...", .{});
 }
 
-/// Function to wrap runServer for use in threads, since error returning functions can't be used
-/// as thread functions. Panics on err, which is fine, since this is used for testing only
-fn runServerWithErrorHandler(
-    allocator: std.mem.Allocator,
-    server_addr: [*:0]const u8,
-    server_port: u16,
-    routes: []Route,
-    stop_iter: u16,
-    exit: *bool,
-) void {
-    runServer(
-        allocator,
-        server_addr,
-        server_port,
-        routes,
-        stop_iter,
-        exit,
-    ) catch |err| {
-        log.err("error running server: {any}", .{err});
-        @panic("error running server in runServerWithErrorHandler");
-    };
-}
-
-fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Connection, routes: []Route) void {
+fn handleConnection(allocator: std.mem.Allocator, connection: *const std.net.Server.Connection, router: *Router) void {
     var recv_header: [4000]u8 = undefined;
     var send_header: [4000]u8 = undefined;
     var conn_reader = connection.stream.reader(&recv_header);
@@ -225,7 +196,7 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
         const head = request.head;
 
         const logging_middleware = middleware.Logging.init();
-        const status = handleRequest(allocator, routes, &request) catch |err| {
+        const status = handleRequest(allocator, router, &request) catch |err| {
             log.err("Error calling handleRequest in handleConnection(): {}", .{err});
             if (@errorReturnTrace()) |trace| {
                 std.debug.dumpStackTrace(trace.*);
@@ -387,7 +358,7 @@ fn handleStaticRoute(request: *std.http.Server.Request) !std.http.Status {
     return status;
 }
 
-fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.http.Server.Request) !std.http.Status {
+fn handleRequest(allocator: std.mem.Allocator, router: *Router, request: *std.http.Server.Request) !std.http.Status {
     log.debug("Handling request for {s}", .{request.head.target});
 
     // CORS middleware will respond to request if allowed is false
@@ -406,7 +377,6 @@ fn handleRequest(allocator: std.mem.Allocator, routes: []Route, request: *std.ht
     defer arena.deinit();
     const arena_allocator = arena.allocator();
 
-    var router = Router.init(arena_allocator, routes);
     var matched_route = try router.match(request.head.method, request.head.target);
     // const route = routing.getRoute(routes, request.head.target);
     if (matched_route == null) {
