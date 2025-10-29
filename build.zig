@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/volt.zig"),
         .target = target,
         .optimize = optimize,
+        .single_threaded = false,
     });
 
     // We will also create a module for our other entry point, 'main.zig'.

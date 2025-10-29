@@ -71,7 +71,7 @@ pub export fn run_server(
 }
 
 fn runServer(
-    allocator: std.mem.Allocator,
+    arena_allocator: std.mem.Allocator,
     server_addr: [*:0]const u8,
     server_port: u16,
     router: *Router,
@@ -114,6 +114,15 @@ fn runServer(
 
     server_is_running = true;
 
+    var threadPool: std.Thread.Pool = undefined;
+    try threadPool.init(std.Thread.Pool.Options{
+        .allocator = arena_allocator,
+        .n_jobs = 1,
+        .stack_size = std.Thread.SpawnConfig.default_stack_size,
+        .track_ids = false,
+    });
+    defer threadPool.deinit();
+
     // Continue checking for new connections. New connections are given a separate thread to be handled in.
     // This thread will continue waiting for requests on the same connection until the connection is closed.
     while (!exit.*) {
@@ -130,18 +139,10 @@ fn runServer(
         log.debug("Handling new connection", .{});
 
         // Give each new connection a new thread.
-        // TODO: This should probably be a threadpool, and the closure of threads handled properly
-        const thread = std.Thread.spawn(
-            .{
-                .allocator = allocator,
-            },
+        try threadPool.spawn(
             handleConnection,
-            .{ allocator, &connection, router },
-        ) catch |err| {
-            log.err("failed to spawn thread: {any}", .{err});
-            continue;
-        };
-        thread.detach();
+            .{ arena_allocator, &connection, router },
+        );
         log.debug("Thread spawned", .{});
     }
 
