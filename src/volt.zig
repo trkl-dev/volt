@@ -450,6 +450,8 @@ fn handleRequest(allocator: std.mem.Allocator, router: *Router, request: *std.ht
 
     var response: *http.Response = undefined;
     const success = handler(&req, &response, &context);
+    defer arena_allocator.free(response.headers);
+    defer arena_allocator.destroy(response);
     log.debug("handler complete", .{});
     if (success == 0) {
         log.err("handler was unsuccessful", .{});
