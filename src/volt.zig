@@ -71,7 +71,7 @@ pub export fn run_server(
 }
 
 fn runServer(
-    arena_allocator: std.mem.Allocator,
+    allocator: std.mem.Allocator,
     server_addr: [*:0]const u8,
     server_port: u16,
     router: *Router,
@@ -116,7 +116,7 @@ fn runServer(
 
     var threadPool: std.Thread.Pool = undefined;
     try threadPool.init(std.Thread.Pool.Options{
-        .allocator = arena_allocator,
+        .allocator = allocator,
         .n_jobs = 1,
         .stack_size = std.Thread.SpawnConfig.default_stack_size,
         .track_ids = false,
@@ -141,7 +141,7 @@ fn runServer(
         // Give each new connection a new thread.
         try threadPool.spawn(
             handleConnection,
-            .{ arena_allocator, &connection, router },
+            .{ allocator, &connection, router },
         );
         log.debug("Thread spawned", .{});
     }
