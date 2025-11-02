@@ -376,16 +376,3 @@ async def app(scope: HTTPScope, receive: ASGIReceiveCallable, send: ASGISendCall
 
 
 
-class TrieNode:
-    def __init__(self) -> None:
-        self.children = []
-        self.segment = ""
-
-
-def insert(root: TrieNode, route: str) -> None:
-    for segment in route.split("/"):
-        for child in root.children:
-            if child.segment != route:
-                continue
-
-
