@@ -22,7 +22,8 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Application Frameworks",
 ]
 dependencies = [
-  "jinja2"
+  "jinja2",
+  "uvicorn"
 ]
 
 [project.optional-dependencies]
@@ -70,3 +71,6 @@ volt = ["lib/*.so", "lib/*.dylib", "lib/*.dll"]
 [tool.setuptools_scm]
 version_scheme = "python-simplified-semver"
 local_scheme = "no-local-version"
+
+[tool.volt]
+log_level = "DEBUG"
