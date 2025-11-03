@@ -26,7 +26,7 @@ jobs:
 
       - name: Install build tools
         run: pip install .[build]
-      
+
       - name: Check build version
         run: python3 -m setuptools_scm
       
