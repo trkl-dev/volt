@@ -26,7 +26,7 @@ formatter = ColorFormatter(
 handler = logging.StreamHandler()
 handler.setFormatter(formatter)
 
-volt_parent = logging.getLogger("volt")
+volt_parent = logging.getLogger()
 volt_parent.addHandler(handler)
 
 volt_parent.setLevel(logging.INFO)

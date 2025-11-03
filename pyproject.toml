@@ -23,7 +23,6 @@ classifiers = [
 ]
 dependencies = [
   "jinja2",
-  "uvicorn"
 ]
 
 [project.optional-dependencies]
@@ -35,6 +34,7 @@ dev = [
 maintainer = [
   "pytest",
   "requests",
+  "uvicorn",
 ]
 # For building Volt
 build = [
