@@ -2,6 +2,7 @@ from collections.abc import Generator
 from contextlib import asynccontextmanager
 import logging
 from pathlib import Path
+import shutil
 import threading
 from http import HTTPStatus, cookies as HTTPCookies
 
@@ -309,12 +310,16 @@ a {
 """
     path = Path(__file__).parent
     static_dir = path / "static"
+    static_dir.mkdir()
+
     styles_file = static_dir / "styles.css"
     _ = styles_file.write_text(css_content, encoding="utf-8")
 
     app.static_location = "volt/static"
+
     yield
-    styles_file.unlink()
+
+    shutil.rmtree(static_dir)
     app.static_location = None
 
 
@@ -345,7 +350,7 @@ def test_lifespan():
         log.debug("callback called!")
         started.set()
 
-    app = Volt(static_location="volt/static", lifespan=dummy_lifespan)
+    app = Volt(lifespan=dummy_lifespan)
 
     config = uvicorn.Config(app, port=9999, callback_notify=callback)
     server = uvicorn.Server(config)
