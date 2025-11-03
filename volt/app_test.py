@@ -13,7 +13,7 @@ from volt import HttpRequest, HttpResponse, Volt, Header
 
 
 log = logging.getLogger("volt.py")
-app = Volt(static_location="volt/static")
+app = Volt()
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -311,8 +311,11 @@ a {
     static_dir = path / "static"
     styles_file = static_dir / "styles.css"
     _ = styles_file.write_text(css_content, encoding="utf-8")
+
+    app.static_location = "volt/static"
     yield
     styles_file.unlink()
+    app.static_location = None
 
 
 def test_static(styles_css_file: None):

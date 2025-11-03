@@ -2,7 +2,9 @@ name: Build and Publish Wheels
 
 on: 
   push:
-    branches: [main]
+    branches: 
+      - main
+      - 13-remove-zig
   release:
     types: [published]
   workflow_dispatch:  # Allows manual triggering

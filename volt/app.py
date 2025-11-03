@@ -30,15 +30,16 @@ class Volt:
     lifespan: LifespanContextManager
     _started: bool = False
     static_path: str = "/static"
-    static_location: str
+    static_location: str | None
 
-    def __init__(self, static_location: str = "static", lifespan: LifespanContextManager | None = None) -> None:
+    def __init__(self, static_location: str | None = None, lifespan: LifespanContextManager | None = None) -> None:
         self.routes = trie.Node[trie.Handler]()
         self.middlewares = [middleware.htmx]
         self.lifespan = lifespan if lifespan is not None else default_lifespan
-        if not Path(static_location).exists():
-            raise RuntimeError(f"static directory: {static_location} could not be found at {Path().resolve()}")
-        self.static_location = static_location
+        if static_location is not None:
+            if not Path(static_location).exists():
+                raise RuntimeError(f"static directory: {static_location} could not be found at {Path().resolve()}")
+            self.static_location = static_location
 
     async def __call__(self, scope: asgi.Scope, receive: asgi.ASGIReceiveCallable, send: asgi.ASGISendCallable) -> None:
         if scope["type"] == "lifespan":
