@@ -12,59 +12,26 @@ on:
 jobs:
   build_wheels:
     name: Build wheel on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          # - macos-13  # for x86 support # Not supported, takes too long to build in GA
-          # - windows-latest # Not supported, zig code needs rework
+    runs-on: ubuntu-latest
     
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0  # Required for setuptools_scm to work
       
-      - name: Setup Zig Compiler
-        uses: mlugg/setup-zig@v2
-        with:
-          version: 0.15.1
-      
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.13'
       
-      - name: Install build tools
-        run: pip install .[build]
-
       - name: Check build version
         run: python3 -m setuptools_scm
       
-      - name: Build Zig binary
-        run: zig build -Doptimize=ReleaseFast --prefix volt
-
-      - name: Check binaries
-        if: runner.debug == '1'
-        run: |
-          file zig-out/lib/*
-
       - name: Build wheel
         run: python -m build
         env:
           MACOSX_DEPLOYMENT_TARGET: 15.7
 
-      - name: Install auditwheel (Linux only)
-        if: runner.os == 'Linux'
-        run: pip install auditwheel
-
-      - name: Repair wheel with auditwheel (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          auditwheel repair dist/*.whl -w dist/
-          rm dist/*-linux_*.whl  # Remove the non-manylinux wheel
-      
       - name: Check wheel
         run: |
           pip install twine
@@ -78,8 +45,6 @@ jobs:
 
       - name: Run tests
         run: pytest
-        env:
-          NO_LOGS: true
       
       - uses: actions/upload-artifact@v4
         with:
@@ -97,29 +62,28 @@ jobs:
       url: https://test.pypi.org/project/volt-framework/
     permissions:
       id-token: write
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' 
     
     steps:
       - uses: actions/download-artifact@v4
         with:
           pattern: wheel-*
-          merge-multiple: true
           path: dist
 
       - name: Publish to Test PyPI (Debugging)
         uses: pypa/gh-action-pypi-publish@release/v1
+        if: runner.debug == '1'
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
           verbose: true
-        if: runner.debug == '1'
       
       - name: Publish to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        if: runner.debug == '0'
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
-        if: runner.debug == '0'
 
   # Upload to production PyPI only on releases
   upload_pypi:
