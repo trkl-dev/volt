@@ -60,12 +60,15 @@ log.debug("template_auto_reload: %s", template_auto_reload)
 
 
 # IP Address to run the server on. Default 127.0.0.1
-server_addr = get_config_value("server_address", default="127.0.0.1")
+server_host = get_config_value("server_host", default="127.0.0.1")
 # Validate IP Address
-_ = ipaddress.ip_address(server_addr)
-log.debug("server_address: %s", server_addr)
+_ = ipaddress.ip_address(server_host)
+log.debug("server_host: %s", server_host)
 
 
 # Port to run the server on. Default 1234
 server_port = get_config_value("server_port", default=1234)
 log.debug("server_port: %s", server_port)
+
+debug = get_config_value("debug", default=False)
+log.debug("debug: %s", debug)
