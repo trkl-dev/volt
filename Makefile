@@ -1,32 +1,13 @@
-all: build 
-
-build: 
-	zig build -Doptimize=Debug -freference-trace
+all: test run
 
 run:
-	-pkill -TERM -f "python example.py" && sleep 2 || pkill -KILL -f "python example.py"
-	python example.py &
-
-debug:
-	-pkill -TERM -f "python example.py" && sleep 2 || pkill -KILL -f "python example.py"
-	lldb python example.py
-
-debug-test:
-	-pkill -TERM -f "python example.py" && sleep 2 || pkill -KILL -f "python example.py"
-	lldb pytest
+	python3 example.py
 
 test: build
-	@echo "Runnning Zig tests..."
-	zig test src/volt.zig
-	@echo "Runnning Python tests..."
-	NO_LOGS="true" pytest
+	pytest
 
-test-verbose: build
-	zig test src/volt.zig
-	pytest -svv
-
-inspect-coredump:
-	coredumpctl debug --debugger lldb
+test-verbose: 
+	pytest -svv --log-cli-level=DEBUG
 
 generate:
 	python -m volt.cli generate

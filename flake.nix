@@ -31,6 +31,7 @@
         pythonEnv = python.withPackages (ps: [
           ps.pywatchman
           ps.jinja2
+          ps.uvicorn
           ps.pytest
           ps.requests
           
