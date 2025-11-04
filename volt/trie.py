@@ -1,19 +1,12 @@
 from http import HTTPMethod
 import logging
-from collections.abc import Coroutine
 from enum import StrEnum
-from typing import Any, Callable, Generic, TypeVar, final, override
-
-from volt import asgi, http
+from typing import Generic, TypeVar, final, override
 
 log = logging.getLogger("volt.test.py")
 log.setLevel(logging.DEBUG)
 
 RouteParams = dict[str, str | int]
-Handler = Callable[
-    [asgi.HTTPScope, asgi.ASGIReceiveCallable, asgi.ASGISendCallable, RouteParams],
-    Coroutine[Any, Any, http.HttpResponse],
-]
 
 
 class ParamValueType(StrEnum):

@@ -59,7 +59,7 @@ class Header:
 type FormData = dict[str, list[str]]
 
 
-class HttpRequest:
+class Request:
     method: HTTPMethod
     path: str
     body: str
@@ -94,7 +94,7 @@ class HttpRequest:
         self.hx_fragment = None
 
 
-class HttpResponse:
+class Response:
     body: str
     content_type: str
     status: HTTPStatus
@@ -117,7 +117,7 @@ class HttpResponse:
         self.cookies = cookies
 
 
-class Redirect(HttpResponse):
+class Redirect(Response):
     """
     Redirect the browser to the location at 'route'.
     This is not htmx-aware at this point
@@ -130,7 +130,7 @@ class Redirect(HttpResponse):
         super().__init__(status=HTTPStatus.FOUND, headers=headers)
 
 
-type Handler = Callable[[HttpRequest], Coroutine[Any, Any, HttpResponse]]
+type Handler = Callable[[Request], Coroutine[Any, Any, Response]]
 
 
 async def generic_response(send: asgi.ASGISendCallable, status: HTTPStatus) -> None:

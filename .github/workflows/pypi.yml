@@ -4,7 +4,6 @@ on:
   push:
     branches: 
       - main
-      - 13-remove-zig
   release:
     types: [published]
   workflow_dispatch:  # Allows manual triggering
@@ -63,7 +62,7 @@ jobs:
       url: https://test.pypi.org/project/volt-framework/
     permissions:
       id-token: write
-    if: github.event_name == 'push' 
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
     steps:
       - uses: actions/download-artifact@v5

@@ -10,7 +10,7 @@ import pytest
 import requests
 import uvicorn
 
-from volt import HttpRequest, HttpResponse, Volt, Header
+from volt import Volt, http
 
 
 log = logging.getLogger("volt.py")
@@ -44,8 +44,8 @@ def server():
 
 
 @app.route("/", method="GET")
-async def root(request: HttpRequest) -> HttpResponse:
-    return HttpResponse(body="success")
+async def root(request: http.Request) -> http.Response:
+    return http.Response("success")
 
 
 def test_root():
@@ -63,8 +63,8 @@ def test_root():
 
 
 @app.route("/success", method="GET")
-async def success(request: HttpRequest) -> HttpResponse:
-    return HttpResponse(body="success")
+async def success(request: http.Request) -> http.Response:
+    return http.Response("success")
 
 
 def test_success():
@@ -77,8 +77,8 @@ def test_success():
 
 
 @app.route("/forbidden", method="GET")
-async def forbidden(request: HttpRequest) -> HttpResponse:
-    return HttpResponse(
+async def forbidden(request: http.Request) -> http.Response:
+    return http.Response(
         body="forbidden",
         status=HTTPStatus.FORBIDDEN,
     )
@@ -94,9 +94,9 @@ def test_forbidden():
 
 
 @app.route("/post", method="POST")
-async def post(request: HttpRequest) -> HttpResponse:
+async def post(request: http.Request) -> http.Response:
     assert request.form_data.get("foo") == ["bar"]
-    return HttpResponse(body="post data success", status=HTTPStatus.CREATED)
+    return http.Response("post data success", status=HTTPStatus.CREATED)
 
 
 def test_post():
@@ -111,11 +111,11 @@ def test_post():
 
 
 @app.route("/query-params", method="GET")
-async def query_params(request: HttpRequest) -> HttpResponse:
+async def query_params(request: http.Request) -> http.Response:
     assert request.query_params.get("param1") == ["value1", "value2"]
     assert request.query_params.get("param2") == ["value3"]
 
-    return HttpResponse(
+    return http.Response(
         body="query params query successful",
         status=HTTPStatus.OK,
     )
@@ -129,11 +129,11 @@ def test_query_params():
 
 
 @app.route("/route-params/{name:str}/{id:int}", method="GET")
-async def route_params(request: HttpRequest) -> HttpResponse:
+async def route_params(request: http.Request) -> http.Response:
     assert request.route_params.get("name") == "dirty"
     assert request.route_params.get("id") == 3
 
-    return HttpResponse(
+    return http.Response(
         body="route params success",
         status=HTTPStatus.OK,
         content_type="text/plain",
@@ -150,12 +150,12 @@ def test_route_params():
 
 
 @app.route("/headers", method="GET")
-async def headers(_request: HttpRequest) -> HttpResponse:
+async def headers(_request: http.Request) -> http.Response:
     headers = [
-        Header("A-Header", "here"),
-        Header("Green-eggs-and", "ham"),
+        http.Header("A-Header", "here"),
+        http.Header("Green-eggs-and", "ham"),
     ]
-    return HttpResponse(
+    return http.Response(
         body="request with headers success",
         status=HTTPStatus.OK,
         headers=headers,
@@ -178,7 +178,7 @@ def test_headers():
 
 
 @app.route("/cookies", method="GET")
-async def cookies(_request: HttpRequest) -> HttpResponse:
+async def cookies(_request: http.Request) -> http.Response:
     cookies = HTTPCookies.SimpleCookie()
     cookies["cookie"] = "yummy"
     cookies["cookie"]["path"] = "/expect-cookies"
@@ -186,7 +186,7 @@ async def cookies(_request: HttpRequest) -> HttpResponse:
     cookies["another"] = "cookie"
     cookies["another"]["path"] = "elsewhere"
 
-    return HttpResponse(
+    return http.Response(
         body="cookies request success",
         status=HTTPStatus.OK,
         cookies=cookies,
@@ -195,7 +195,7 @@ async def cookies(_request: HttpRequest) -> HttpResponse:
 
 
 @app.route("/expect-cookies", method="GET")
-async def expect_cookies(request: HttpRequest) -> HttpResponse:
+async def expect_cookies(request: http.Request) -> http.Response:
     assert len(request.cookies.items()) == 2
 
     cookie_cookie = request.cookies.get("cookie")
@@ -209,7 +209,7 @@ async def expect_cookies(request: HttpRequest) -> HttpResponse:
     another_cookie = request.cookies.get("another")
     assert another_cookie is None
 
-    return HttpResponse(
+    return http.Response(
         body="cookies request success",
         status=HTTPStatus.OK,
         content_type="text/plain",
@@ -237,7 +237,7 @@ def test_cookies():
 
 
 @app.route("/kitchen-sink/{name:str}/{id:int}", method="GET")
-async def kitchen_sink(request: HttpRequest) -> HttpResponse:
+async def kitchen_sink(request: http.Request) -> http.Response:
     assert request.query_params.get("param1") == ["value1", "value2"]
     assert request.query_params.get("param2") == ["value3"]
 
@@ -250,10 +250,10 @@ async def kitchen_sink(request: HttpRequest) -> HttpResponse:
     cookies["something"] = "else"
 
     headers = [
-        Header("A-Header", "here"),
-        Header("Green-eggs-and", "ham"),
+        http.Header("A-Header", "here"),
+        http.Header("Green-eggs-and", "ham"),
     ]
-    return HttpResponse(
+    return http.Response(
         body="everything but the kitchen sink",
         status=HTTPStatus.OK,
         cookies=cookies,
@@ -281,13 +281,13 @@ def test_kitchen_sink():
 
 
 @app.route("/nested/second", method="GET")
-async def nested_2(_request: HttpRequest) -> HttpResponse:
-    return HttpResponse(body="second nested")
+async def nested_2(_request: http.Request) -> http.Response:
+    return http.Response("second nested")
 
 
 @app.route("/nested", method="GET")
-async def nested_1(_request: HttpRequest) -> HttpResponse:
-    return HttpResponse(body="first nested")
+async def nested_1(_request: http.Request) -> http.Response:
+    return http.Response("first nested")
 
 
 # NOTE:: This tests a regression

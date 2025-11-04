@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Coroutine
 from contextlib import _AsyncGeneratorContextManager, asynccontextmanager
 import logging
 from http import HTTPMethod, HTTPStatus
@@ -6,7 +7,7 @@ from http import cookies as http_cookies
 import mimetypes
 from pathlib import Path
 import traceback
-from typing import Callable
+from typing import Any, Callable
 from urllib.parse import parse_qs
 
 from volt import asgi, middleware, http, trie
@@ -22,10 +23,14 @@ async def default_lifespan(app: "Volt"):
 
 
 type LifespanContextManager = Callable[["Volt"], _AsyncGeneratorContextManager[None, None]]
+Handler = Callable[
+    [asgi.HTTPScope, asgi.ASGIReceiveCallable, asgi.ASGISendCallable, trie.RouteParams],
+    Coroutine[Any, Any, http.Response],
+]
 
 
 class Volt:
-    routes: trie.Node[trie.Handler]
+    routes: trie.Node[Handler]
     middlewares: list[middleware.MiddlewareType]
     lifespan: LifespanContextManager
     _started: bool = False
@@ -33,7 +38,7 @@ class Volt:
     static_location: str | None
 
     def __init__(self, static_location: str | None = None, lifespan: LifespanContextManager | None = None) -> None:
-        self.routes = trie.Node[trie.Handler]()
+        self.routes = trie.Node[Handler]()
         self.middlewares = [middleware.htmx]
         self.lifespan = lifespan if lifespan is not None else default_lifespan
         if static_location is not None:
@@ -95,7 +100,7 @@ class Volt:
                 receive: asgi.ASGIReceiveCallable,
                 send: asgi.ASGISendCallable,
                 route_params: trie.RouteParams,
-            ) -> http.HttpResponse:
+            ) -> http.Response:
                 _ = send  # Keeping this around for now
                 log.debug("registering handler")
 
@@ -131,7 +136,7 @@ class Volt:
                     log.error("unexpected HTTP method")
                     raise e
 
-                request_object = http.HttpRequest(
+                request_object = http.Request(
                     method=method,
                     path=scope["path"],
                     body=request_body,

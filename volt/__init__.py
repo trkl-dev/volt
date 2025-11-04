@@ -1,10 +1,10 @@
 from . import log
 from .app import Volt
-from .http import HttpRequest, HttpResponse, Header
+from .http import Request, Response, Header
 
 __all__ = [
     "Volt",
-    "HttpRequest",
-    "HttpResponse",
+    "Request",
+    "Response",
     "Header",
 ]

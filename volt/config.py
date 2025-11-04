@@ -72,3 +72,6 @@ log.debug("server_port: %s", server_port)
 
 debug = get_config_value("debug", default=False)
 log.debug("debug: %s", debug)
+
+allowed_hosts = get_config_value("allowed_hosts", default=[])
+log.debug("allowed_hosts: %s", allowed_hosts)

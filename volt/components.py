@@ -48,7 +48,7 @@ class Component:
         hx-select-oob="#id-of-oob-block" in the block template.
         """
 
-        request: http.HttpRequest
+        request: http.Request
         oob: list["Component"]
 
     context: Context
@@ -56,7 +56,7 @@ class Component:
     def __init__(self, context: Context) -> None:
         self.context = context
 
-    def render(self, request: http.HttpRequest) -> str:
+    def render(self, request: http.Request) -> str:
         assert self.template_name != "", (
             f"template_name for class {self.__class__} must be defined"
         )
