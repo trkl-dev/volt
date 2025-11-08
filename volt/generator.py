@@ -3,9 +3,10 @@ from dataclasses import dataclass, asdict
 import logging
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, meta
-from jinja2.nodes import Block, For, Name
+from jinja2.nodes import Block, For, Name, Tuple
 
 log = logging.getLogger('volt.generator.py')
+log.setLevel(logging.DEBUG)
 
 environment = Environment(loader=FileSystemLoader("templates/"))
 
@@ -39,14 +40,21 @@ def get_block_children(block: Block, template_name: str, referenced_templates: I
         blocks.append(child_block)
         blocks.extend(get_block_children(child_block, template_name, referenced_templates, top_level=False))
 
+    # We want to make sure that we are excluding fields that are captured by parents. Since we are inheriting from 
+    # these components, we don't want to require them on on the child components as well
+    parent_fields: list[str] = []
+    for parent_block in blocks:
+        parent_fields.extend(get_block_fields(parent_block))
+
+    fields = [field for field in get_block_fields(block) if field not in parent_fields]
+
     # Set the name to just be the name of the block, unless the block is a content block,
     # in which case we name it the file name
-    formatted_template_name = template_name[: template_name.find(".")].title()
+    formatted_template_name = template_name_as_title(template_name)
     name = formatted_template_name + name_as_title(block.name)
     # if block.name == "content":
     #     name = template_name[: template_name.find(".")].title()
 
-    fields = get_block_fields(block)
 
     parent_components = [formatted_template_name + name_as_title(block.name) for block in blocks]
     # If we have an 'extends' at the top level, we ensure this is added as a parent component to any component
@@ -74,6 +82,9 @@ def name_as_title(name: str) -> str:
     name = f"{name.replace('_', ' ').title().replace(' ', '')}"
     return name
 
+def template_name_as_title(template_name: str) -> str:
+    return template_name[: template_name.find(".")].title().replace("_", "")
+
 
 def get_block_fields(block: Block) -> list[str]:
     fields: list[str] = []
@@ -84,10 +95,16 @@ def get_block_fields(block: Block) -> list[str]:
         # block.
         fors = block.find_all(For)
         for f in fors:
-            assert isinstance(f.target, Name), (
-                f"Unexpected For type: {type(f.target)} for {f.target}"
-            )
-            excludes.append(f.target)
+            # Regular For loop, e.g. for item in items -> item is the target
+            if isinstance(f.target, Name):
+                excludes.append(f.target)
+            # Occurs when unpacking as part of a for loop, e.g. for key, value in dict.items() -> (key, value) is the target
+            elif isinstance(f.target, Tuple):
+                for target in f.target.items:
+                    assert isinstance(target, Name)
+                    excludes.append(target)
+            else:
+                raise Exception(f"Unexpected For type: {type(f.target)} for {f.target}")
 
         # TODO: Look at the `For` type and see if vars that are created from for loops can be omitted
         names = block_body_node.find_all(Name)
@@ -110,7 +127,6 @@ def get_block_fields(block: Block) -> list[str]:
     return fields
 
 # TODO: Check against templates without blocks
-# TODO: Figure out how to add Navbar to base.html component (top level blocks are not handled correctly atm)
 def generate():
     context = Context(
         components=[],
@@ -136,9 +152,9 @@ def generate():
                 continue
             log.debug(f"Inspecting block: {block.name}")
             template_blocks.extend(get_block_children(block, template_name, referenced_templates, top_level=True))
-            parent_components.append(template_name[: template_name.find(".")].title() + name_as_title(block.name))
+            parent_components.append(template_name_as_title(template_name) + name_as_title(block.name))
 
-        name = template_name[: template_name.find(".")].title()
+        name = template_name_as_title(template_name)
         all_components.append(GeneratedComponent(
             name=name,
             template_name=template_name,
