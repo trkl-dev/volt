@@ -75,3 +75,9 @@ log.debug("debug: %s", debug)
 
 allowed_hosts = get_config_value("allowed_hosts", default=[])
 log.debug("allowed_hosts: %s", allowed_hosts)
+
+templates_location = get_config_value("templates_location", default="templates")
+log.debug("templates_location: %s", templates_location)
+
+require_component_types = get_config_value("require_component_types", default=False)
+log.debug("require_component_types: %s", require_component_types)

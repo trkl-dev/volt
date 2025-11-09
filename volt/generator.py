@@ -5,10 +5,9 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, meta
 from jinja2.nodes import Block, For, Name, Tuple
 
-log = logging.getLogger('volt.generator.py')
-log.setLevel(logging.DEBUG)
+from volt import config
 
-environment = Environment(loader=FileSystemLoader("templates/"))
+log = logging.getLogger("volt.generator.py")
 
 
 @dataclass
@@ -29,7 +28,9 @@ class Context:
 all_components: list[GeneratedComponent] = []
 
 
-def get_block_children(block: Block, template_name: str, referenced_templates: Iterator[str | None], top_level: bool) -> Iterable[Block]:
+def get_block_children(
+    block: Block, template_name: str, referenced_templates: Iterator[str | None], top_level: bool
+) -> Iterable[Block]:
     blocks: list[Block] = []
 
     child_blocks = block.iter_child_nodes()
@@ -40,7 +41,7 @@ def get_block_children(block: Block, template_name: str, referenced_templates: I
         blocks.append(child_block)
         blocks.extend(get_block_children(child_block, template_name, referenced_templates, top_level=False))
 
-    # We want to make sure that we are excluding fields that are captured by parents. Since we are inheriting from 
+    # We want to make sure that we are excluding fields that are captured by parents. Since we are inheriting from
     # these components, we don't want to require them on on the child components as well
     parent_fields: list[str] = []
     for parent_block in blocks:
@@ -52,13 +53,10 @@ def get_block_children(block: Block, template_name: str, referenced_templates: I
     # in which case we name it the file name
     formatted_template_name = template_name_as_title(template_name)
     name = formatted_template_name + name_as_title(block.name)
-    # if block.name == "content":
-    #     name = template_name[: template_name.find(".")].title()
-
 
     parent_components = [formatted_template_name + name_as_title(block.name) for block in blocks]
     # If we have an 'extends' at the top level, we ensure this is added as a parent component to any component
-    # at that same 'top level', so as to ensure any fields in extended templates are also required as part of the 
+    # at that same 'top level', so as to ensure any fields in extended templates are also required as part of the
     # dataclass context
     if top_level:
         for referenced_template in referenced_templates:
@@ -81,6 +79,7 @@ def get_block_children(block: Block, template_name: str, referenced_templates: I
 def name_as_title(name: str) -> str:
     name = f"{name.replace('_', ' ').title().replace(' ', '')}"
     return name
+
 
 def template_name_as_title(template_name: str) -> str:
     return template_name[: template_name.find(".")].title().replace("_", "")
@@ -126,11 +125,12 @@ def get_block_fields(block: Block) -> list[str]:
 
     return fields
 
+
 # TODO: Check against templates without blocks
-def generate():
+def _generate(environment: Environment, import_types: bool) -> str:
     context = Context(
         components=[],
-        import_types=True,
+        import_types=import_types,
     )
 
     if environment.loader is None:
@@ -155,28 +155,50 @@ def generate():
             parent_components.append(template_name_as_title(template_name) + name_as_title(block.name))
 
         name = template_name_as_title(template_name)
-        all_components.append(GeneratedComponent(
-            name=name,
-            template_name=template_name,
-            block_name="content",
-            parent_components=parent_components,
-            fields=[],
-        ))
+        all_components.append(
+            GeneratedComponent(
+                name=name,
+                template_name=template_name,
+                block_name="content",
+                parent_components=parent_components,
+                fields=[],
+            )
+        )
 
+    # Add all components without parents
+    for c in all_components:
+        if len(list(c.parent_components)) != 0:
+            continue
+        context.components.append(c)
 
-    for component in all_components:
-        log.warning(f"component created: {component}")
-        context.components.append(component)
+    while len(all_components) != len(context.components):
+        for c in all_components:
+            if c in context.components:
+                continue
+            if not all(pc in [cc.name for cc in context.components] for pc in c.parent_components):
+                continue
+
+            context.components.append(c)
 
     parent_dir = Path(__file__).parent
-    gen_environment = Environment(loader=FileSystemLoader(parent_dir))
-    template_file =  "components.py.j2"
+    gen_environment = Environment(loader=FileSystemLoader(parent_dir), trim_blocks=True, lstrip_blocks=True)
+    template_file = "components.py.j2"
     template = gen_environment.get_template(template_file)
     output = template.render(asdict(context))
+    return output
 
+
+def generate():
+    templates_location = Path(config.templates_location)
+    if not templates_location.is_dir():
+        raise Exception(f"{config.templates_location} must be a directory")
+
+    environment = Environment(loader=FileSystemLoader(templates_location))
+    output = _generate(environment, config.require_component_types)
     with open("components_gen.py", "w") as f:
         len_written = f.write(output)
         assert len_written == len(output)
+
 
 if __name__ == "__main__":
     generate()
