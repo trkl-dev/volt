@@ -1,0 +1,42 @@
+name: Run pull request tasks
+
+on: 
+  pull_request:
+
+jobs:
+  run_tests:
+    name: Run tests
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Install build tools
+        run: pip install .[build]
+
+      - name: Check build version
+        run: python3 -m setuptools_scm
+      
+      - name: Build wheel
+        run: python -m build
+
+      - name: Check wheel
+        run: |
+          pip install twine
+          twine check dist/*
+
+      - name: Install built wheel
+        run: pip install dist/*.whl
+
+      - name: Install maintainer requirements for testing
+        run: pip install .[maintainer]
+
+      - name: Run tests
+        run: pytest
