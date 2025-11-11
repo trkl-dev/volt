@@ -81,3 +81,6 @@ log.debug("templates_location: %s", templates_location)
 
 require_component_types = get_config_value("require_component_types", default=False)
 log.debug("require_component_types: %s", require_component_types)
+
+htmx_default_block = get_config_value("htmx_default_block", default="content")
+log.debug("htmx_default_block: %s", htmx_default_block)

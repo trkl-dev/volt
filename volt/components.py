@@ -1,7 +1,6 @@
 import logging
 
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from typing import Any, NamedTuple
 
 from jinja2 import Environment, FileSystemLoader
@@ -11,19 +10,10 @@ from volt import config, http
 log = logging.getLogger("volt.py")
 
 environment = Environment(
-    loader=FileSystemLoader("templates/"),
+    loader=FileSystemLoader(config.templates_location),
     auto_reload=config.template_auto_reload,
 )
 
-
-def nice_time(value: Any):
-    if not isinstance(value, datetime):
-        raise ValueError("nice_time filter only accepts type 'datetime'")
-
-    return value.strftime("%H:%M%p")
-
-
-environment.filters["nice_time"] = nice_time
 
 Block = NamedTuple("Block", [("template_name", str), ("block_name", str)])
 
@@ -37,12 +27,12 @@ class Component:
     """
 
     template_name: str = ""
-    block_name: str = "content"
+    block_name: str = config.htmx_default_block
 
     @dataclass
     class Context:
         """
-        The component assumes the block to be called 'content' if no alternative is provided,
+        The default component is called 'content' if no alternative is provided,
         and will natively handle HTMX partial requests, by returning individual blocks. Out-Of-Band
         swaps can be created adding Components to the 'oob' field in the Context, and setting
         hx-select-oob="#id-of-oob-block" in the block template.
@@ -57,18 +47,14 @@ class Component:
         self.context = context
 
     def render(self, request: http.Request) -> str:
-        assert self.template_name != "", (
-            f"template_name for class {self.__class__} must be defined"
-        )
+        assert self.template_name != "", f"template_name for class {self.__class__} must be defined"
 
         if request.hx_request:
             context = asdict(self.context)
             html = render_block(
                 environment,
                 self.template_name,
-                request.hx_fragment
-                if request.hx_fragment is not None
-                else self.block_name,
+                request.hx_fragment if request.hx_fragment is not None else self.block_name,
                 context,
             )
             for component in self.context.oob:
@@ -114,9 +100,7 @@ def render_block(
 
 class BlockNotFoundError(Exception):
     def __init__(self, block_name: str, template_name: str, message: str | None = None):
-        super().__init__(
-            message or f"Block {block_name} not in template {template_name}"
-        )
+        super().__init__(message or f"Block {block_name} not in template {template_name}")
 
 
 #
