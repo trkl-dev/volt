@@ -3,7 +3,7 @@ from dataclasses import dataclass, asdict
 import logging
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, meta
-from jinja2.nodes import Block, For, Name, Tuple
+from jinja2.nodes import Block, ContextReference, DerivedContextReference, Expr, For, Name, Node, Tuple
 
 from volt import config
 
@@ -94,6 +94,7 @@ def get_block_fields(block: Block) -> list[str]:
         # block.
         fors = block.find_all(For)
         for f in fors:
+            log.debug("Fors: %s", f)
             # Regular For loop, e.g. for item in items -> item is the target
             if isinstance(f.target, Name):
                 excludes.append(f.target)
@@ -105,9 +106,14 @@ def get_block_fields(block: Block) -> list[str]:
             else:
                 raise Exception(f"Unexpected For type: {type(f.target)} for {f.target}")
 
+        r = block_body_node.find_all(Node)
+        # log.debug("len(r): %d", len(list(r)))
+        for rr in r:
+            log.debug("r: %s", rr)
         # TODO: Look at the `For` type and see if vars that are created from for loops can be omitted
         names = block_body_node.find_all(Name)
         for name in names:
+            log.debug("name: %s", name)
             skip = False
             for exc in excludes:
                 if name.name == exc.name:
@@ -142,12 +148,24 @@ def _generate(environment: Environment, import_types: bool) -> str:
         template_source = environment.loader.get_source(environment, template_name)[0]
         template_ast = environment.parse(template_source)
 
+
+        # r = template_ast.find_all(DerivedContextReference)
+        # log.debug("len(r): %d", len(list(r)))
+        # for rr in r:
+        #     log.debug("r: %s", rr)
+
         referenced_templates = meta.find_referenced_templates(template_ast)
 
         template_blocks: list[Block] = []
         parent_components: list[str] = []
         blocks = template_ast.iter_child_nodes()
         for block in blocks:
+
+            # r = block.find_all(DerivedContextReference)
+            # log.debug("len(r): %d", len(list(r)))
+            # for rr in r:
+            #     log.debug("r: %s", rr)
+
             if not isinstance(block, Block):
                 continue
             log.debug(f"Inspecting block: {block.name}")

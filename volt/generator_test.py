@@ -9,6 +9,13 @@ def test_generate():
 
 {% block content %}
 {{ bar }}
+{% for bar in foo %}
+{% if loop.index < 4 %}
+{{ foo }}
+{{ loop.index }}
+<p>Something</p>
+{% endif %}
+{% endfor %}
 {% endblock %}
 """,
         "base.html": """
@@ -65,6 +72,7 @@ class AboutContent(Base):
     @dataclass
     class Context(Base.Context):
         bar: AboutContentTypes.bar
+        foo: AboutContentTypes.foo
 
     def __init__(self, context: Context) -> None:
         super().__init__(context)
