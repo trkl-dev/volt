@@ -1,7 +1,7 @@
 import logging
 
-from dataclasses import asdict, dataclass
-from typing import Any, NamedTuple
+from dataclasses import asdict, dataclass, field, is_dataclass
+from typing import Any, NamedTuple, Protocol
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -24,13 +24,19 @@ class Component:
     in a template. A component will associate a block within a template, with a set context
     class for that block, which should contain all of the fields required for that block to
     render. Ideally, there should be exactly one Component class defined, for every block.
+
+    The intention behind ContextProtocol and Context, is that the ContextProtocol is what 
+    defines the type that the Component expects, for a context. This can be satisfied by any 
+    structure the user desires, provided it implements the protocol for that component. The 
+    Context dataclass is provided as a convenience, containing all the required fields for the 
+    component context, and can be used directly, without having to define your own object.
     """
 
     template_name: str = ""
     block_name: str = config.htmx_default_block
 
-    @dataclass
-    class Context:
+
+    class ContextProtocol(Protocol):
         """
         The default component is called 'content' if no alternative is provided,
         and will natively handle HTMX partial requests, by returning individual blocks. Out-Of-Band
@@ -38,19 +44,36 @@ class Component:
         hx-select-oob="#id-of-oob-block" in the block template.
         """
 
-        request: http.Request
-        oob: list["Component"]
+        # request: http.Request
+        # oob: list["Component"]
 
-    context: Context
 
-    def __init__(self, context: Context) -> None:
+    @dataclass(kw_only=True)
+    class Context:
+        """
+        This dataclass is provided as a convenience, containing all the required fields for the 
+        component context, and can be used directly, without having to define your own object.
+        """
+
+        # request: http.Request
+        # oob: list["Component"] = field(default_factory=list["Component"])
+
+    context: ContextProtocol
+
+
+    def __init__(self, context: ContextProtocol) -> None:
         self.context = context
 
     def render(self, request: http.Request) -> str:
         assert self.template_name != "", f"template_name for class {self.__class__} must be defined"
 
-        if request.hx_request:
+        context = self.context
+        if is_dataclass(self.context):
             context = asdict(self.context)
+        # else:  # TODO: This should better handle converting to a dictionary?
+        #     context = self.context.__dict__
+
+        if request.hx_request:
             html = render_block(
                 environment,
                 self.template_name,
@@ -58,15 +81,20 @@ class Component:
                 context,
             )
             for component in self.context.oob:
+                component_context = component.context
+                if is_dataclass(component.context):
+                    component_context = asdict(component.context)
+                # else:
+                #     component_context = component.context.__dict__
+
                 html += render_block(
                     environment,
                     component.template_name,
                     component.block_name,
-                    asdict(component.context),
+                    component_context,
                 )
             return html
 
-        context = asdict(self.context)
         template = environment.get_template(self.template_name)
         html = template.render(context)
         return html

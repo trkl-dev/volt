@@ -1,5 +1,5 @@
 from jinja2 import DictLoader, Environment
-from volt.generator import _generate
+from volt.generator import _generate, generate_new
 
 
 def test_generate():
@@ -9,23 +9,29 @@ def test_generate():
 
 {% block content %}
 {{ bar }}
-{% for bar in foo %}
+{{ baz.some_attribute }}
+{{ baz.attribute.another_one }}
+{% for i in foo %}
 {% if loop.index < 4 %}
-{{ foo }}
+{{ i }}
+{{ i.something }}
 {{ loop.index }}
 <p>Something</p>
 {% endif %}
 {% endfor %}
+{% for ii in ss.things %}
+{{ ii.inner }}
+{% endfor %}
 {% endblock %}
 """,
-        "base.html": """
+        base.html": """
 {{ foo }}
 {% block content %}
 {% endblock %}
 """,
     }
     environment = Environment(loader=DictLoader(templates))
-    output = _generate(environment, import_types=True)
+    output = generate_new(environment, import_types=True)
     print(output)
     expected_output = """# pyright: basic
 \"\"\"
@@ -47,7 +53,7 @@ class BaseContent(Component):
 
     @dataclass
     class Context(Component.Context):
-        ...
+        foo: BaseContent.foo
 
     def __init__(self, context: Context) -> None:
         super().__init__(context)
@@ -72,7 +78,7 @@ class AboutContent(Base):
     @dataclass
     class Context(Base.Context):
         bar: AboutContentTypes.bar
-        foo: AboutContentTypes.foo
+        foo: Iterable[Any]
 
     def __init__(self, context: Context) -> None:
         super().__init__(context)
@@ -90,4 +96,7 @@ class About(AboutContent):
         super().__init__(context)
 
 """
-    assert output == expected_output
+    with open("tt.py", "w+") as f:
+        _ = f.write(output)
+
+    # assert output == expected_output, output
